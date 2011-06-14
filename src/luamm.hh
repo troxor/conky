@@ -86,6 +86,7 @@ namespace lua {
 		 * difficult to modify this to work with copying, if that proves unavoidable.
 		 */
 		state *L;
+		std::shared_ptr<const bool> L_valid;
 		int key;
 
 		static std::string get_error_msg(state *L);
@@ -95,7 +96,8 @@ namespace lua {
 
 	public:
 		exception(exception &&other)
-			: std::runtime_error(std::move(other)), L(other.L), key(other.key)
+			: std::runtime_error(std::move(other)), L(other.L),
+			  L_valid(std::move(other.L_valid)), key(other.key)
 		{ other.L = NULL; }
 
 		explicit exception(state *l);
@@ -177,9 +179,20 @@ namespace lua {
 		}
 
 		bool safe_compare(lua_CFunction trampoline, int index1, int index2);
+
+		/**
+		 * The pointed-to value is true if this object still exists. We need this because the
+		 * exceptions have to know if they may reference it to remove the saved lua exception. If
+		 * this object is destroyed then the exception was already collected by the garbage
+		 * colletor and referencing this would generate a segfault.
+		 */
+		std::shared_ptr<bool> valid;
+
 	public:
 		state();
-		~state() { lua_close(cobj); }
+		~state() { *valid = false; lua_close(cobj); }
+
+		std::shared_ptr<const bool> get_valid() const { return valid; }
 
 		/*
 		 * Lua functions come in three flavours
