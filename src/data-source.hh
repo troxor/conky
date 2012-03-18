@@ -43,22 +43,19 @@ namespace conky {
 	 */
     class data_source_base {
     public:
-        const std::string name;
-
-        data_source_base(const std::string &name_)
-            : name(name_)
-        {}
-
         virtual ~data_source_base() {}
         virtual double get_number() const;
         virtual std::string get_text() const;
     };
+
+	typedef std::function<std::shared_ptr<data_source_base> (lua::state *)> data_source_factory;
 
 	/*
 	 * A simple data source that returns the value of some variable. It ignores the lua table.
 	 * The source variable can be specified as a fixed parameter to the register_data_source
 	 * constructor, or one can create a subclass and then set the source from the subclass
 	 * constructor.
+	 * XXX: do we need this?
 	 */
 	template<typename T>
 	class simple_numeric_source: public data_source_base {
@@ -66,9 +63,9 @@ namespace conky {
 
 		const T *source;
 	public:
-		simple_numeric_source(lua::state *, const std::string &name_, const T *source_)
-			: data_source_base(name_), source(source_)
-		{}
+		simple_numeric_source(lua::state *l, const T *source_)
+			: source(source_)
+		{ l->pop(); }
 
 		virtual double get_number() const
 		{ return *source; }
@@ -81,40 +78,30 @@ namespace conky {
 	namespace priv {
 		const char data_source_metatable[] = "conky::data_source_metatable";
 
-		void do_register_data_source(const std::string &name, const lua::cpp_function &fn);
-
-		class disabled_data_source: public simple_numeric_source<float> {
-		public:
-			disabled_data_source(lua::state *l, const std::string &name,
-					const std::string &setting);
-		};
+		void do_register_data_source(const std::string &name, const data_source_factory &factory);
 
 	}
 
 	/*
 	 * Declaring an object of this type at global scope will register a data source with the
-	 * given name. Any additional parameters are passed on to the data source constructor.
+	 * given name.
 	 */
-	template<typename T>
 	class register_data_source {
-		template<typename... Args>
+/*		template<typename... Args>
 		static int factory(lua::state *l, const std::string &name, const Args&... args)
 		{
-			T *t = static_cast<T *>(l->newuserdata(sizeof(T)));
-			l->insert(1);
-			new(t) T(l, name, args...);
-			l->settop(1);
-			l->rawgetfield(lua::REGISTRYINDEX, priv::data_source_metatable);
-			l->setmetatable(-2);
-			return 1;
-		}
+		}*/
 
 	public:
-		template<typename... Args>
-		register_data_source(const std::string &name, Args&&... args)
+		register_data_source(const std::string &name, const data_source_factory &factory)
+		{ priv::do_register_data_source(name, factory); }
+
+		template<typename Functor, typename... Args>
+		register_data_source(const std::string &name, Functor functor,
+				Args&&... args)
 		{
-			priv::do_register_data_source( name, std::bind(&factory<Args...>,
-						std::placeholders::_1, name, args...
+			priv::do_register_data_source( name, std::bind(functor, std::placeholders::_1,
+						std::forward<Args>(args)...
 				)); 
 		}
 	};
@@ -123,9 +110,15 @@ namespace conky {
 	 * Use this to declare a data source that has been disabled during compilation. We can then
 	 * print a nice error message telling the used which setting to enable.
 	 */
-	class register_disabled_data_source: public register_data_source<priv::disabled_data_source> {
+	class register_disabled_data_source: public register_data_source {
+		static
+		std::shared_ptr<data_source_base>
+		factory(lua::state *l, const std::string &name, const std::string &setting);
+
 	public:
-		register_disabled_data_source(const std::string &name, const std::string &setting);
+		register_disabled_data_source(const std::string &name, const std::string &setting)
+			: register_data_source(name, &factory, name, setting)
+		{}
 	};
 
 	/*

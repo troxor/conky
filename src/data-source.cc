@@ -84,10 +84,19 @@ namespace conky {
 			"  print(string.format([[Invalid data source operation: '%s']], key));\n"
 			"  return 0/0;\n"
 			"end\n";
+
+		int factory_wrapper(lua::state *l, const data_source_factory &factory)
+		{
+			l->createuserdata<std::shared_ptr<data_source_base>>(factory(l));
+
+			l->rawgetfield(lua::REGISTRYINDEX, priv::data_source_metatable);
+			l->setmetatable(-2);
+			return 1;
+		}
 	}
 
 	namespace priv {
-		void do_register_data_source(const std::string &name, const lua::cpp_function &fn)
+		void do_register_data_source(const std::string &name, const data_source_factory &factory)
 		{
 			struct data_source_constructor {
 				data_source_constructor()  { data_sources = new data_sources_t(); }
@@ -95,20 +104,21 @@ namespace conky {
 			};
 			static data_source_constructor constructor;
 
-			bool inserted = data_sources->insert({name, fn}).second;
+			bool inserted = data_sources->insert({name,
+					std::bind(factory_wrapper, std::placeholders::_1, factory)}).second;
 			if(not inserted)
 				throw std::logic_error("Data source with name '" + name + "' already registered");
 		}
+	}
 
-		disabled_data_source::disabled_data_source(lua::state *l, const std::string &name,
-								   const std::string &setting)
-			: simple_numeric_source<float>(l, name, &NaN)
-		{
-			// XXX some generic way of reporting errors? NORM_ERR?
-			std::cerr << "Support for variable '" << name
-					  << "' has been disabled during compilation. Please recompile with '"
-					  << setting << "'" << std::endl;
-		}
+	std::shared_ptr<data_source_base>
+	register_disabled_data_source::factory(lua::state *l, const std::string &name, const std::string &setting)
+	{
+		// XXX some generic way of reporting errors? NORM_ERR?
+		std::cerr << "Support for variable '" << name
+			<< "' has been disabled during compilation. Please recompile with '"
+			<< setting << "'" << std::endl;
+		return std::make_shared<simple_numeric_source<float>>(l, &NaN);
 	}
 
 	double data_source_base::get_number() const
@@ -120,11 +130,6 @@ namespace conky {
 		s << get_number();
 		return s.str();
 	}
-
-	register_disabled_data_source::register_disabled_data_source(const std::string &name, 
-			const std::string &setting)
-		: register_data_source<priv::disabled_data_source>(name, setting)
-	{}
 
 	// at least one data source should always be registered, so data_sources will not be null
 	void export_data_sources(lua::state &l)
@@ -159,7 +164,4 @@ namespace conky {
 }
 
 /////////// example data sources, remove after real data sources are available ///////
-int asdf_ = 47;
-conky::register_data_source<conky::simple_numeric_source<int>> asdf("asdf", &asdf_);
-
 conky::register_disabled_data_source zxcv("zxcv", "BUILD_ZXCV");
