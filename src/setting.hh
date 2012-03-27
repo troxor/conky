@@ -49,6 +49,34 @@ namespace conky {
 	 */
 	void cleanup_config_settings(lua::state &l);
 
+	class conversion_error: public std::runtime_error {
+	public:
+		conversion_error(const std::string &msg)
+			: std::runtime_error(msg)
+		{}
+	};
+
+	template<typename Signed1, typename Signed2>
+	bool between(Signed1 value, Signed2 min,
+			typename std::enable_if<std::is_signed<Signed1>::value
+								== std::is_signed<Signed2>::value, Signed2>::type max)
+	{ return value >= min && value <= max; }
+
+	template<typename Signed1, typename Unsigned2>
+	bool between(Signed1 value, Unsigned2 min,
+			typename std::enable_if<std::is_unsigned<Unsigned2>::value
+								&& std::is_signed<Signed1>::value, Unsigned2>::type max)
+	{
+		return value >= 0
+			&& static_cast<typename std::make_unsigned<Signed1>::type>(value) >= min
+			&& static_cast<typename std::make_unsigned<Signed1>::type>(value) <= max;
+	}
+
+	namespace priv {
+		void type_check(lua::state &l, int index, lua::Type type1, lua::Type type2,
+				const std::string &description);
+	}
+
 	template<typename T,
 		bool is_integral = std::is_integral<T>::value,
 		bool floating_point = std::is_floating_point<T>::value,
@@ -63,79 +91,89 @@ namespace conky {
 	// specialization for integral types
 	template<typename T>
 	struct lua_traits<T, true, false, false> {
-		static const lua::Type type = lua::TNUMBER;
-		typedef lua::integer Type;
+		static T
+		from_lua(lua::state &l, int index, const std::string &description)
+		{
+			priv::type_check(l, index, lua::TNUMBER, lua::TSTRING, description);
 
-		static inline std::pair<Type, bool>
-		convert(lua::state &l, int index, const std::string &)
-		{ return {l.tointeger(index), true}; }
+			lua::integer t = l.tointeger(index);
+			if(not between(t, std::numeric_limits<T>::min(), std::numeric_limits<T>::max()))
+				throw conversion_error(std::string("Value out of range for " + description + '.'));
+
+			return t;
+		}
 	};
 
 	// specialization for floating point types
 	template<typename T>
 	struct lua_traits<T, false, true, false> {
-		static const lua::Type type = lua::TNUMBER;
-		typedef lua::number Type;
+		static inline T
+		from_lua(lua::state &l, int index, const std::string &description)
+		{
+			priv::type_check(l, index, lua::TNUMBER, lua::TSTRING, description);
 
-		static inline std::pair<Type, bool>
-		convert(lua::state &l, int index, const std::string &)
-		{ return {l.tonumber(index), true}; }
+			return l.tonumber(index);
+		}
 	};
 
 	// specialization for std::string
 	template<>
 	struct lua_traits<std::string, false, false, false> {
-		static const lua::Type type = lua::TSTRING;
-		typedef std::string Type;
+		static inline std::string
+		from_lua(lua::state &l, int index, const std::string &description)
+		{
+			priv::type_check(l, index, lua::TSTRING, lua::TSTRING, description);
 
-		static inline std::pair<Type, bool>
-		convert(lua::state &l, int index, const std::string &)
-		{ return {l.tostring(index), true}; }
+			return l.tostring(index);
+		}
 	};
 
 	// specialization for bool
 	template<>
 	struct lua_traits<bool, true, false, false> {
-		static const lua::Type type = lua::TBOOLEAN;
-		typedef bool Type;
+		static inline bool
+		from_lua(lua::state &l, int index, const std::string &description)
+		{
+			priv::type_check(l, index, lua::TBOOLEAN, lua::TBOOLEAN, description);
 
-		static inline std::pair<Type, bool>
-		convert(lua::state &l, int index, const std::string &)
-		{ return {l.toboolean(index), true}; }
+			return l.toboolean(index);
+		}
 	};
 
 	// specialization for enums
 	// to use this, one first has to declare string<->value map
 	template<typename T>
 	struct lua_traits<T, false, false, true> {
-		static const lua::Type type = lua::TSTRING;
-		typedef T Type;
-
 		typedef std::initializer_list<std::pair<std::string, T>> Map;
 		static Map map;
 
-		static std::pair<T, bool> convert(lua::state &l, int index, const std::string &name)
+		static T
+		from_lua(lua::state &l, int index, const std::string &description)
 		{
-			std::string val = l.tostring(index);
+			priv::type_check(l, index, lua::TSTRING, lua::TSTRING, description);
+
+			const std::string &val = l.tostring(index);
 
 			for(auto i = map.begin(); i != map.end(); ++i) {
 				if(i->first == val)
-					return {i->second, true};
+					return i->second;
 			}
 
-			std::string msg = "Invalid value '" + val + "' for setting '"
-				+ name + "'. Valid values are: ";
+			std::string msg = "Invalid value '" + val + "' for "
+				+ description + ". Valid values are: ";
 			for(auto i = map.begin(); i != map.end(); ++i) {
 				if(i != map.begin())
 					msg += ", ";
-				msg += "'" + i->first + "'";
+				msg += '\'' + i->first + '\'';
 			}
-			msg += ".";
-			NORM_ERR("%s", msg.c_str());
-			
-			return {T(), false};
+			msg += '.';
+			throw conversion_error(msg);
 		}
 	};
+
+	template<typename T, typename Traits = lua_traits<T>>
+	T from_lua(lua::state &l, int index, const std::string &description)
+	{ return Traits::from_lua(l, index, description); }
 
 	namespace priv {
 		class config_setting_base {
@@ -250,7 +288,7 @@ namespace conky {
 		const T default_value;
 		const bool modifiable;
 
-		virtual std::pair<typename Traits::Type, bool> do_convert(lua::state &l, int index);
+		virtual std::pair<T, bool> do_convert(lua::state &l, int index);
 		virtual void lua_setter(lua::state &l, bool init);
 
 		virtual T getter(lua::state &l)
@@ -267,20 +305,19 @@ namespace conky {
 	};
 
 	template<typename T, typename Traits>
-	std::pair<typename Traits::Type, bool>
+	std::pair<T, bool>
 	simple_config_setting<T, Traits>::do_convert(lua::state &l, int index)
 	{
 		if(l.isnil(index))
 			return {default_value, true};
 
-		if(l.type(index) != Traits::type) {
-			NORM_ERR("Invalid value of type '%s' for setting '%s'. "
-					 "Expected value of type '%s'.", l.type_name(l.type(index)),
-					 Base::name.c_str(), l.type_name(Traits::type) );
+		try {
+			return { Traits::from_lua(l, index, "setting '" + Base::name + '\''), true };
+		}
+		catch(const conversion_error &e) {
+			NORM_ERR("%s", e.what());
 			return {default_value, false};
 		}
-
-		return Traits::convert(l, index, Base::name);
 	}
 
 	template<typename T, typename Traits>
@@ -301,20 +338,6 @@ namespace conky {
 		++s;
 	}
 
-	template<typename Signed1, typename Signed2>
-	bool between(Signed1 value, Signed2 min,
-				typename std::enable_if<std::is_signed<Signed2>::value, Signed2>::type max)
-	{ return value >= min && value <= max; }
-
-	template<typename Signed1, typename Unsigned2>
-	bool between(Signed1 value, Unsigned2 min,
-				typename std::enable_if<std::is_unsigned<Unsigned2>::value, Unsigned2>::type max)
-	{
-		return value >= 0
-			&& static_cast<typename std::make_unsigned<Signed1>::type>(value) >= min
-			&& static_cast<typename std::make_unsigned<Signed1>::type>(value) <= max;
-	}
-
 	// Just like simple_config_setting, except that in only accepts value in the [min, max] range
 	template<typename T, typename Traits = lua_traits<T>>
 	class range_config_setting: public simple_config_setting<T, Traits> {
@@ -332,7 +355,7 @@ namespace conky {
 		{ assert(min <= Base::default_value && Base::default_value <= max); }
 
 	protected:
-		virtual std::pair<typename Traits::Type, bool> do_convert(lua::state &l, int index)
+		virtual std::pair<T, bool> do_convert(lua::state &l, int index)
 		{
 			auto ret = Base::do_convert(l, index);
 			if(ret.second && !between(ret.first, min, max)) {

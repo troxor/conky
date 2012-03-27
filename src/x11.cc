@@ -220,8 +220,8 @@ conky::lua_traits<window_hints>::Map conky::lua_traits<window_hints>::map = {
 	{ "skip_pager",   HINT_SKIP_PAGER }
 };
 
-std::pair<uint16_t, bool>
-window_hints_traits::convert(lua::state &l, int index, const std::string &name)
+uint16_t
+window_hints_traits::from_lua(lua::state &l, int index, const std::string &description)
 {
 	typedef conky::lua_traits<window_hints> Traits;
 
@@ -237,15 +237,13 @@ window_hints_traits::convert(lua::state &l, int index, const std::string &name)
 	while((newpos = hints.find_first_of(", ", pos)) != std::string::npos) {
 		if(newpos > pos) {
 			l.pushstring(hints.substr(pos, newpos-pos));
-			auto t = conky::lua_traits<window_hints>::convert(l, -1, name);
-			if(not t.second)
-				return {0, false};
-			SET_HINT(ret, t.first);
+			window_hints t = conky::from_lua<window_hints>(l, -1, description);
+			SET_HINT(ret, t);
 			l.pop();
 		}
 		pos = newpos+1;
 	}
-	return {ret, true};
+	return ret;
 }
 #endif
 

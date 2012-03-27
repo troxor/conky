@@ -29,6 +29,7 @@
 #include <type_traits>
 
 #include "luamm.hh"
+#include "layout-item.hh"
 
 namespace conky {
 
@@ -41,9 +42,15 @@ namespace conky {
 	 *   displaying the value of the data source. The default implementation converts
 	 *   get_number() to a string, but you can override to return anything (e.g. add units)
 	 */
-    class data_source_base {
+    class data_source_base: public layout_item {
     public:
-        virtual ~data_source_base() {}
+		virtual point size(const output_method &om)
+		{ return om.get_text_size(get_text()); }
+
+		virtual void draw(output_method &om, const point &p, const point &dim)
+		{ om.draw_text(get_text(), p, dim); }
+
+
         virtual double get_number() const;
         virtual std::string get_text() const;
     };

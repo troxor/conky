@@ -174,12 +174,9 @@ namespace priv {
 	};
 	
 	struct colour_traits {
-		static const lua::Type type = lua::TSTRING;
-		typedef unsigned long Type;
-
-		static inline std::pair<Type, bool>
-		convert(lua::state &l, int index, const std::string &)
-		{ return {get_x11_color(l.tostring(index)), true}; }
+		static inline unsigned long
+		from_lua(lua::state &l, int index, const std::string &)
+		{ return get_x11_color(l.tostring(index)); }
 	};
 
 	class colour_setting: public conky::simple_config_setting<unsigned long, colour_traits> {
@@ -218,9 +215,7 @@ extern conky::simple_config_setting<std::string> own_window_title;
 extern conky::simple_config_setting<window_type> own_window_type;
 
 struct window_hints_traits {
-	static const lua::Type type = lua::TSTRING;
-	typedef uint16_t Type;
-	static std::pair<Type, bool> convert(lua::state &l, int index, const std::string &name);
+	static uint16_t from_lua(lua::state &l, int index, const std::string &description);
 };
 extern conky::simple_config_setting<uint16_t, window_hints_traits> own_window_hints;
 
