@@ -27,6 +27,9 @@
 
 #include <string.h>
 
+#include <cassert>
+#include <cstdarg>
+
 #if !defined(HAVE_PIPE2) || !defined(HAVE_O_CLOEXEC)
 #include <fcntl.h>
 
@@ -72,4 +75,26 @@ std::pair<int, int> pipe2(int flags)
 		throw errno_error("pipe2");
 	else
 		return std::pair<int, int>(fd[0], fd[1]);
+}
+
+std::string strprintf(const char *format, ...)
+{
+	std::string str;
+	str.resize(strlen(format)*2);
+
+	va_list list;
+	va_start(list, format);
+
+	int r = vsnprintf(&*str.begin(), str.size(), format, list);
+	if(r < 0)
+		throw errno_error("strprintf");
+	if(static_cast<size_t>(r) >= str.size()) {
+		str.resize(r+1);
+		r = vsnprintf(&*str.begin(), str.size(), format, list);
+	}  else
+		str.resize(r+1);
+	assert(str.size() == r+1u);
+
+	va_end(list);
+	return str;
 }

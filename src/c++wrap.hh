@@ -49,4 +49,6 @@ public:
 	const int err;
 };
 
+std::string strprintf(const char *format, ...) __attribute__(( format(printf, 1, 2) ));
+
 #endif /* CPPWRAP_HH */
