@@ -97,12 +97,12 @@ namespace conky {
 		return columns.size();
 	}
 
-	std::shared_ptr<layout_item> table_layout::read_cell(lua::state &l, size_t rowno, size_t colno)
+	table_layout::cell table_layout::read_cell(lua::state &l, size_t rowno, size_t colno)
 	{
 		lua::stack_sentry s(l, -1);
 
 		try {
-			return layout_item::create(l);
+			return cell(layout_item::create(l));
 		}
 		catch(std::runtime_error &e) {
 			NORM_ERR("table_layout: Cell (%zd, %zd) invalid.\n%s", rowno, colno, e.what());
@@ -148,13 +148,34 @@ namespace conky {
 		}
 	}
 
-	point table_layout::size(const output_method &)
+	point table_layout::size(const output_method &om)
 	{
-		// TODO
-		return {0,0};
+		point res;
+		int32_t ypos;
+		for(auto i = grid.begin(); i != grid.end(); ++i) {
+			int32_t height = 0;
+			int32_t xpos = 0;
+			for(auto j = i->begin(); j != i->end(); ++j) {
+				cell::item_data &d = j->data[&om];
+				d.size = j->item->size(om);
+				d.pos = { xpos, ypos };
+				height = std::max(height, d.size.y);
+				xpos += d.size.x + 5;
+			}
+			ypos += height + 5;
+		}
+		return res;
 	}
 
-	void table_layout::draw(output_method &, const point &, const point &)
+	void table_layout::draw(output_method &om, const point &p, const point &size)
 	{
+		for(auto i = grid.begin(); i != grid.end(); ++i) {
+			for(auto j = i->begin(); j != i->end(); ++j) {
+				cell::item_data &d = j->data[&om];
+
+				j->item->draw(om, p+d.pos, min(d.size, size-d.pos));
+			}
+		}
+
 	}
 }

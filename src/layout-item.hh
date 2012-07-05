@@ -36,7 +36,24 @@ namespace conky {
 	struct point {
 		int32_t x;
 		int32_t y;
+
+		point()
+			: x(0), y(0)
+		{}
+
+		point(int32_t x_, int32_t y_)
+			: x(x_), y(y_)
+		{}
 	};
+
+	inline point operator+(const point &l, const point &r)
+	{ return { l.x+r.x, l.y+r.y }; }
+
+	inline point operator-(const point &l, const point &r)
+	{ return { l.x-r.x, l.y-r.y }; }
+
+	inline point min(const point &l, const point &r)
+	{ return { std::min(l.x, r.x), std::min(l.y, r.y) }; }
 
 	// XXX: probably should be moved to a separate file
 	class output_method {
