@@ -61,7 +61,7 @@ namespace conky {
 		virtual ~output_method() {}
 
 		virtual point get_text_size(const std::string &text) const = 0;
-		virtual void draw_text(const std::string &text, const point &p, const point &dim) = 0;
+		virtual void draw_text(const std::string &text, const point &p, const point &size) = 0;
 	};
 
 	/**
@@ -75,10 +75,10 @@ namespace conky {
 		virtual point size(const output_method &om) = 0;
 
 		/**
-		 * Draws this item to om, p contains the coordinates of the top-left corner, p+dim is
+		 * Draws this item to om, p contains the coordinates of the top-left corner, p+size is
 		 * the lower-right corner.
 		 */
-		virtual void draw(output_method &om, const point &p, const point &dim) = 0;
+		virtual void draw(output_method &om, const point &p, const point &size) = 0;
 
 		static std::shared_ptr<layout_item> create(lua::state &) { return {}; }
 	};

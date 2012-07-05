@@ -57,7 +57,20 @@ namespace conky {
 
 	typedef std::function<std::shared_ptr<data_source_base> (lua::state *)> data_source_factory;
 
-	/*
+	/// A simple data source returning some fixed string.
+	class string_source: public data_source_base {
+	public:
+		explicit string_source(const std::string &text_)
+			: text(text_)
+		{}
+
+        virtual std::string get_text() const { return text; }
+
+	private:
+		std::string text;
+	};
+
+	/**
 	 * A simple data source that returns the value of some variable. It ignores the lua table.
 	 * The source variable can be specified as a fixed parameter to the register_data_source
 	 * constructor, or one can create a subclass and then set the source from the subclass
