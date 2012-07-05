@@ -105,7 +105,7 @@ option(BUILD_X11 "Build X11 support" true)
 if(BUILD_X11)
 	option(OWN_WINDOW "Enable own_window support" true)
 	option(BUILD_XDAMAGE "Build Xdamage support" true)
-	option(BUILD_XDBE "Build Xdbe (double-buffer) support" true)
+	option(BUILD_XDBE "Build Xdbe (double-buffer) support" false)
 	option(BUILD_XFT "Build Xft (freetype fonts) support" true)
 	option(BUILD_IMLIB2 "Enable Imlib2 support" false)
 else(BUILD_X11)
@@ -131,7 +131,7 @@ option(BUILD_BMPX "Build BMPx (music player) support" false)
 
 option(BUILD_MPD "Enable if you want MPD (music player) support" true)
 
-option(BUILD_MYSQL "Enable if you want MySQL support" true)
+option(BUILD_MYSQL "Enable if you want MySQL support" false)
 
 option(BUILD_MOC "Enable if you want MOC (music player) support" true)
 

@@ -4,7 +4,7 @@
 #
 # Please see COPYING for details
 #
-# Copyright (c) 2005-2010 Brenden Matthews, et. al. (see AUTHORS)
+# Copyright (c) 2005-2012 Brenden Matthews, et. al. (see AUTHORS)
 # All rights reserved.
 #
 # This program is free software: you can redistribute it and/or modify
@@ -53,6 +53,11 @@ if(OS_FREEBSD)
 	set(freebsd freebsd.cc bsdapm.cc)
 	set(optional_sources ${optional_sources} ${freebsd})
 endif(OS_FREEBSD)
+
+if(OS_DRAGONFLY)
+    set(dragonfly dragonfly.cc bsdapm.cc)
+    set(optional_sources ${optional_sources} ${dragonfly})
+endif(OS_DRAGONFLY)
 
 if(OS_OPENBSD)
 	set(openbsd openbsd.cc bsdapm.cc)

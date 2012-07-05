@@ -10,7 +10,7 @@
  * Please see COPYING for details
  *
  * Copyright (c) 2004, Hannu Saransaari and Lauri Hakkarainen
- * Copyright (c) 2005-2010 Brenden Matthews, Philip Kovacs, et. al.
+ * Copyright (c) 2005-2012 Brenden Matthews, Philip Kovacs, et. al.
  *	(see AUTHORS)
  * All rights reserved.
  *
@@ -39,9 +39,11 @@
 #include <sys/types.h>
 #include <fcntl.h>
 
-/* linux */
 #ifdef HAVE_SYS_STATFS_H
 #include <sys/statfs.h>
+#ifndef HAVE_STATFS64
+#define statfs64 statfs
+#endif
 #endif
 
 /* freebsd && netbsd */
@@ -53,10 +55,13 @@
 #endif
 #if defined(__FreeBSD__)
 #include "freebsd.h"
+#elif defined(__DragonFly__)
+#include "dragonfly.h"
 #endif
 
 
-#if !defined(HAVE_STRUCT_STATFS_F_FSTYPENAME) && !defined (__OpenBSD__) && !defined(__FreeBSD__)
+#if !defined(HAVE_STRUCT_STATFS_F_FSTYPENAME) && \
+	!defined (__OpenBSD__) && !defined(__FreeBSD__) && !defined(__DragonFly__)
 #include <mntent.h>
 #endif
 
@@ -142,7 +147,8 @@ static void update_fs_stat(struct fs_stat *fs)
 void get_fs_type(const char *path, char *result)
 {
 
-#if defined(HAVE_STRUCT_STATFS_F_FSTYPENAME) || defined(__FreeBSD__) || defined (__OpenBSD__)
+#if defined(HAVE_STRUCT_STATFS_F_FSTYPENAME) || \
+	defined(__FreeBSD__) || defined (__OpenBSD__) || defined(__DragonFly__)
 
 	struct statfs64 s;
 	if (statfs64(path, &s) == 0) {

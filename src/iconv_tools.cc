@@ -10,7 +10,7 @@
  * Please see COPYING for details
  *
  * Copyright (c) 2004, Hannu Saransaari and Lauri Hakkarainen
- * Copyright (c) 2005-2010 Brenden Matthews, Philip Kovacs, et. al.
+ * Copyright (c) 2005-2012 Brenden Matthews, Philip Kovacs, et. al.
  *	(see AUTHORS)
  * All rights reserved.
  *
@@ -81,7 +81,7 @@ void iconv_convert(size_t *a, char *buff_in, char *p, size_t p_max_size)
 {
 	int bytes;
 	size_t dummy1, dummy2;
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__DragonFly__)
 	const char *ptr = buff_in;
 #else
 	char *ptr = buff_in;

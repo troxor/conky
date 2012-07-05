@@ -5,7 +5,7 @@
  *
  * Please see COPYING for details
  *
- * Copyright (c) 2005-2010 Brenden Matthews, et. al.
+ * Copyright (c) 2005-2012 Brenden Matthews, et. al.
  * All rights reserved.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -175,6 +175,11 @@ static void cimlib_draw_image(struct image_list_s *cur, int *clip_x, int
 	int w, h;
 	time_t now = time(NULL);
 	static int rep = 0;
+
+	if (imlib_context_get_drawable() != window.drawable) {
+		imlib_context_set_drawable(window.drawable);
+	}
+
 
 	image = imlib_load_image(cur->name);
 	if (!image) {

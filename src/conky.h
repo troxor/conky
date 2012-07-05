@@ -10,7 +10,7 @@
  * Please see COPYING for details
  *
  * Copyright (c) 2004, Hannu Saransaari and Lauri Hakkarainen
- * Copyright (c) 2005-2010 Brenden Matthews, Philip Kovacs, et. al.
+ * Copyright (c) 2005-2012 Brenden Matthews, Philip Kovacs, et. al.
  *	(see AUTHORS)
  * All rights reserved.
  *
@@ -173,6 +173,9 @@ struct information {
 	unsigned int mask;
 
 	struct utsname uname_s;
+#if defined(__DragonFly__)
+    char uname_v[256]; /* with git version */
+#endif
 
 	char freq[10];
 

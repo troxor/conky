@@ -11,7 +11,7 @@
  *
  * Copyright (c) 2005 Adi Zaimi, Dan Piponi <dan@tanelorn.demon.co.uk>,
  *					  Dave Clark <clarkd@skynet.ca>
- * Copyright (c) 2005-2010 Brenden Matthews, Philip Kovacs, et. al.
+ * Copyright (c) 2005-2012 Brenden Matthews, Philip Kovacs, et. al.
  *	(see AUTHORS)
  * All rights reserved.
  *
@@ -128,7 +128,6 @@ void get_top_info(void);
 extern struct process *first_process;
 extern unsigned long g_time;
 
-struct process *find_process(pid_t pid);
-struct process *new_process(int p);
+struct process *get_process(pid_t pid);
 
 #endif /* _top_h_ */

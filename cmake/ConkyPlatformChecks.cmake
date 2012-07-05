@@ -36,6 +36,7 @@ check_function_exists(strndup HAVE_STRNDUP)
 
 check_symbol_exists(pipe2 "unistd.h" HAVE_PIPE2)
 check_symbol_exists(O_CLOEXEC "fcntl.h" HAVE_O_CLOEXEC)
+check_symbol_exists(statfs64 "sys/statfs.h" HAVE_STATFS64)
 
 AC_SEARCH_LIBS(clock_gettime "time.h" CLOCK_GETTIME_LIB "rt")
 if(NOT CLOCK_GETTIME_LIB)
@@ -56,6 +57,11 @@ if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
 	set(conky_libs ${conky_libs} -lkvm -ldevstat)
 endif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
 
+if(CMAKE_SYSTEM_NAME MATCHES "DragonFly")
+    set(OS_DRAGONFLY true)
+    set(conky_libs ${conky_libs} -ldevstat)
+endif(CMAKE_SYSTEM_NAME MATCHES "DragonFly")
+
 if(CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
 	set(OS_OPENBSD true)
 endif(CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
@@ -68,9 +74,13 @@ if(CMAKE_SYSTEM_NAME MATCHES "NetBSD")
 	set(OS_NETBSD true)
 endif(CMAKE_SYSTEM_NAME MATCHES "NetBSD")
 
-if(NOT OS_LINUX AND NOT OS_FREEBSD AND NOT OS_OPENBSD)
+if(NOT OS_LINUX AND NOT OS_FREEBSD AND NOT OS_OPENBSD AND NOT OS_DRAGONFLY)
 	message(FATAL_ERROR "Your platform, '${CMAKE_SYSTEM_NAME}', is not currently supported.  Patches are welcome.")
-endif(NOT OS_LINUX AND NOT OS_FREEBSD AND NOT OS_OPENBSD)
+endif(NOT OS_LINUX AND NOT OS_FREEBSD AND NOT OS_OPENBSD AND NOT OS_DRAGONFLY)
+
+if(BUILD_I18N AND OS_DRAGONFLY)
+	set(conky_libs ${conky_libs} -lintl)
+endif(BUILD_I18N AND OS_DRAGONFLY)
 
 if(BUILD_MATH)
 	set(conky_libs ${conky_libs} -lm)
@@ -197,7 +207,8 @@ if(BUILD_X11)
 		if(BUILD_XFT)
 			find_path(freetype_INCLUDE_PATH freetype/config/ftconfig.h ${INCLUDE_SEARCH_PATH}
 				/usr/include/freetype2
-				/usr/local/include/freetype2)
+				/usr/local/include/freetype2
+				/usr/pkg/include/freetype2)
 			if(freetype_INCLUDE_PATH)
 				set(freetype_FOUND true)
 				set(conky_includes ${conky_includes} ${freetype_INCLUDE_PATH})

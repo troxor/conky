@@ -10,7 +10,7 @@
  * Please see COPYING for details
  *
  * Copyright (c) 2004, Hannu Saransaari and Lauri Hakkarainen
- * Copyright (c) 2005-2010 Brenden Matthews, Philip Kovacs, et. al.
+ * Copyright (c) 2005-2012 Brenden Matthews, Philip Kovacs, et. al.
  * (see AUTHORS)
  * All rights reserved.
  *
@@ -64,7 +64,7 @@ struct diskio_stat *prepare_diskio_stat(const char *s)
 	if (!s)
 		return &stats;
 
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__DragonFly__)
 	if (strncmp(s, "/dev/", 5) == 0) {
 		// supplied a /dev/device arg, so cut off the /dev part
 		strncpy(&(device_name[0]), s + 5, text_buffer_size.get(*state));

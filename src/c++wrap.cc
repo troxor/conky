@@ -25,6 +25,7 @@
 
 #include "c++wrap.hh"
 
+#include <unistd.h>
 #include <string.h>
 
 #include <cassert>
@@ -65,7 +66,8 @@ namespace {
 std::string strerror_r(int errnum)
 {
 	char buf[100];
-	return strerror_r(errnum, buf, sizeof buf);
+	strerror_r(errnum, buf, sizeof buf);
+	return buf;
 }
 
 std::pair<int, int> pipe2(int flags)

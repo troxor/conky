@@ -5,7 +5,7 @@
  *
  * Please see COPYING for details
  *
- * Copyright (c) 2005-2010 Brenden Matthews, Philip Kovacs, et. al.
+ * Copyright (c) 2005-2012 Brenden Matthews, Philip Kovacs, et. al.
  *	(see AUTHORS)
  * All rights reserved.
  *
@@ -118,6 +118,11 @@ void print_machine(struct text_object *, char *, int);
 void print_nodename(struct text_object *, char *, int);
 void print_nodename_short(struct text_object *, char *, int);
 void print_sysname(struct text_object *, char *, int);
+
+#if defined(__DragonFly__)
+void print_version(struct text_object *obj, char *p, int p_max_size);
+#endif
+
 
 void print_uptime(struct text_object *, char *, int);
 void print_uptime_short(struct text_object *, char *, int);

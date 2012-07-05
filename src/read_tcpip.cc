@@ -10,7 +10,7 @@
  * Please see COPYING for details
  *
  * Copyright (c) 2004, Hannu Saransaari and Lauri Hakkarainen
- * Copyright (c) 2005-2010 Brenden Matthews, Philip Kovacs, et. al.
+ * Copyright (c) 2005-2012 Brenden Matthews, Philip Kovacs, et. al.
  *	(see AUTHORS)
  * All rights reserved.
  *
@@ -78,7 +78,7 @@ void parse_tcp_ping_arg(struct text_object *obj, const char *arg, void *free_at_
 	obj->data.opaque = addr;
 	memset(addr, 0, sizeof(struct sockaddr_in));
 	hostname = (char *) malloc(strlen(arg)+1);
-	switch( sscanf(arg, "%s %"SCNu16, hostname, &(addr->sin_port)) ) {
+	switch( sscanf(arg, "%s %" SCNu16, hostname, &(addr->sin_port)) ) {
 	case 1:
 		addr->sin_port = DEFAULT_TCP_PING_PORT;
 		break;

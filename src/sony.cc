@@ -5,7 +5,7 @@
  *
  * Please see COPYING for details
  *
- * Copyright (c) 2005-2010 Brenden Matthews, Philip Kovacs, et. al.
+ * Copyright (c) 2005-2012 Brenden Matthews, Philip Kovacs, et. al.
  * Copyright (c) 2009 Yeon-Hyeong Yang <lbird94@gmail.com>
  *	(see AUTHORS)
  * All rights reserved.
@@ -72,7 +72,7 @@ void get_sony_fanspeed(struct text_object *obj, char *p_client_buffer, int clien
 		}
 	} else {
 		CRIT_ERR(NULL, NULL, "can't open '%s': %s\nEnable sony support or remove "
-			"sony* from your "PACKAGE_NAME" config file.",
+			"sony* from your " PACKAGE_NAME" config file.",
 			fan, strerror(errno));
 	}
 

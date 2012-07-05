@@ -7,7 +7,7 @@
  *
  * Copyright (c) 2004, Hannu Saransaari and Lauri Hakkarainen
  * Copyright (c) 2007 Toni Spets
- * Copyright (c) 2005-2010 Brenden Matthews, Philip Kovacs, et. al.
+ * Copyright (c) 2005-2012 Brenden Matthews, Philip Kovacs, et. al.
  *	(see AUTHORS)
  * All rights reserved.
  *
@@ -1050,7 +1050,7 @@ static int open_sysfs_sensor(const char *dir, const char *dev, const char *type,
 		fd = open(path, O_RDONLY);
 		if (fd < 0) {
 			NORM_ERR("can't open '%s': %s\nplease check your device or remove this "
-					 "var from "PACKAGE_NAME, path, strerror(errno));
+					 "var from " PACKAGE_NAME, path, strerror(errno));
 		}
 	}
 
@@ -2812,15 +2812,8 @@ static void update_process_table(void)
 		}
 
 		if (sscanf(entry->d_name, "%d", &pid) > 0) {
-			struct process *p;
-
-			p = find_process(pid);
-			if (!p) {
-				p = new_process(pid);
-			}
-
-			/* compute each process cpu usage */
-			calculate_stats(p);
+		/* compute each process cpu usage */
+			calculate_stats(get_process(pid));
 		}
 	}
 
