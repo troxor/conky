@@ -80,8 +80,15 @@ namespace conky {
 		 */
 		virtual void draw(output_method &om, const point &p, const point &size) = 0;
 
-		static std::shared_ptr<layout_item> create(lua::state &) { return {}; }
+		static std::shared_ptr<layout_item> create(lua::state &l);
 	};
+
+	/*
+	 * It expects to have a table at the top of lua stack. It then exports all the layout engines
+	 * into that table.
+	 */
+	void export_layout_engines(lua::state &l);
+
 }
 
 #endif /* LAYOUT_ITEM_HH */

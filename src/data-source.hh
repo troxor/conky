@@ -146,6 +146,18 @@ namespace conky {
 	 * into that table (actually, into a "variables" subtable).
 	 */
 	void export_data_sources(lua::state &l);
+
+	inline const std::shared_ptr<data_source_base> &get_data_source(lua::state &l, int index)
+	{ return *l.checkudata<std::shared_ptr<data_source_base>>(index, priv::data_source_metatable); }
+
+	template<typename T>
+	std::shared_ptr<T> get_data_source(lua::state &l, int index)
+	{
+		auto t = std::dynamic_pointer_cast<T>(get_data_source(l, index));
+		if(not t)
+			throw std::runtime_error("Data source is not of requested type.");
+		return t;
+	}
 }
 
 #endif /* DATA_SOURCE_HH */

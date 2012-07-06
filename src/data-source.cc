@@ -48,28 +48,18 @@ namespace conky {
 		 */
 		data_sources_t *data_sources;
 
-		data_source_base& get_data_source(lua::state *l)
-		{
-			if(l->gettop() != 1)
-				throw std::runtime_error("Wrong number of parameters");
-
-			l->rawgetfield(lua::REGISTRYINDEX, priv::data_source_metatable);
-			if(not l->getmetatable(-2) or not l->rawequal(-1, -2))
-				throw std::runtime_error("Invalid parameter");
-
-			return *static_cast<data_source_base *>(l->touserdata(1));
-		}
-
 		int data_source_asnumber(lua::state *l)
 		{
-			double x = get_data_source(l).get_number();
+			l->checkargno(1);
+			double x = get_data_source(*l, -1)->get_number();
 			l->pushnumber(x);
 			return 1;
 		}
 
 		int data_source_astext(lua::state *l)
 		{
-			std::string x = get_data_source(l).get_text();
+			l->checkargno(1);
+			std::string x = get_data_source(*l, -1)->get_text();
 			l->pushstring(x);
 			return 1;
 		}
