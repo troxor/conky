@@ -5,7 +5,7 @@
  *
  * Please see COPYING for details
  *
- * Copyright (C) 2010 Pavel Labath et al.
+ * Copyright (C) 2010-2012 Pavel Labath et al.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 #include "lua-config.hh"
 
 #include "data-source.hh"
+#include "layout-item.hh"
 #include "setting.hh"
 
 namespace conky {
@@ -36,6 +37,7 @@ namespace conky {
 
 		l.newtable(); {
 			export_data_sources(l);
+			export_layout_engines(l);
 
 			l.newtable();
 			l.rawsetfield(-2, "config");

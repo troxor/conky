@@ -84,7 +84,7 @@ namespace conky {
 			l.pushboolean(false);
 			l.rawsetfield(-2, "__metatable");
 
-			l.pushdestructor<layout_item>();
+			l.pushdestructor<std::shared_ptr<layout_item>>();
 			l.rawsetfield(-2, "__gc");
 		} l.pop();
 
