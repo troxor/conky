@@ -31,7 +31,7 @@
 
 namespace conky {
 	namespace {
-		const char layout_engine_metatable[] = "conky::layout_engine_metatable";
+		const char layout_item_metatable[] = "conky::layout_item_metatable";
 
 		template<typename T>
 		int layout_factory(lua::state *l)
@@ -41,7 +41,7 @@ namespace conky {
 
 			l->createuserdata<std::shared_ptr<layout_item>>( std::make_shared<T>(*l) );
 
-			l->rawgetfield(lua::REGISTRYINDEX, layout_engine_metatable);
+			l->rawgetfield(lua::REGISTRYINDEX, layout_item_metatable);
 			l->setmetatable(-2);
 
 			return 1;
@@ -62,13 +62,11 @@ namespace conky {
 				try {
 					return get_data_source(l, -1);
 				}
-				catch(lua::check_error &) {
-				}
+				catch(lua::check_error &) { /*i gnore */ }
 				try {
-					/// XXX: detect layout items
+					return *l.checkudata<std::shared_ptr<layout_item>>(-1, layout_item_metatable);
 				}
-				catch(...) {
-				}
+				catch(lua::check_error &) { /*i gnore */ }
 			default:
 				NORM_ERR("Unrecognized type of parameter: %s", l.type_name(l.type(-1)));
 				return {};
@@ -80,7 +78,7 @@ namespace conky {
 		lua::stack_sentry s(l);
 		l.checkstack(2);
 
-		l.newmetatable(layout_engine_metatable); {
+		l.newmetatable(layout_item_metatable); {
 			l.pushboolean(false);
 			l.rawsetfield(-2, "__metatable");
 
