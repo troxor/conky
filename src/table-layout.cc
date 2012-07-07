@@ -35,7 +35,10 @@ namespace conky {
 	lua_traits<table_layout::alignment>::Map lua_traits<table_layout::alignment>::map = {
 		{ "left",   table_layout::alignment::LEFT },
 		{ "center", table_layout::alignment::CENTER },
-		{ "right",  table_layout::alignment::RIGHT }
+		{ "right",  table_layout::alignment::RIGHT },
+		{ "l",      table_layout::alignment::LEFT },
+		{ "c",      table_layout::alignment::CENTER },
+		{ "r",      table_layout::alignment::RIGHT }
 	};
 
 	table_layout::column table_layout::default_column = {0, alignment::LEFT};
@@ -65,7 +68,7 @@ namespace conky {
 					NORM_ERR("table_layout: Alignment of column %zd invalid, using defaults...", colno);
 				else
 					t.align = conky::from_lua<table_layout::alignment>(l, -1, 
-							strprintf("alignment of column %zd", colno));
+							strprintf("table_layout alignment of column %zd", colno));
 			}
 			catch(conky::conversion_error &e) {
 				NORM_ERR("%s", e.what());
@@ -114,6 +117,11 @@ namespace conky {
 	{
 		l.checkstack(1);
 		lua::stack_sentry s(l, -1);
+
+		if(not l.istable(-1)) {
+			NORM_ERR("table_layout: Skipping invalid row %zd.", rowno);
+			return {};
+		}
 
 		Row row;
 
