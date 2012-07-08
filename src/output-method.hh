@@ -21,44 +21,41 @@
  *
  */
 
-#ifndef LAYOUT_ITEM_HH
-#define LAYOUT_ITEM_HH
-
-#include <cstdint>
-#include <memory>
-#include <string>
-#include <utility>
-
-#include "luamm.hh"
-#include "output-method.hh"
+#ifndef OUTPUT_METHOD_HH
+#define OUTPUT_METHOD_HH
 
 namespace conky {
 
-	/**
-	 * A base class for everything that can be displayed on the screen.
-	 */
-	class layout_item {
-	public:
-		virtual ~layout_item() {}
+	struct point {
+		int32_t x;
+		int32_t y;
 
-		/// Calculates the space this item will occupy when drawn to om.
-		virtual point size(const output_method &om) = 0;
+		point()
+			: x(0), y(0)
+		{}
 
-		/**
-		 * Draws this item to om, p contains the coordinates of the top-left corner, p+size is
-		 * the lower-right corner.
-		 */
-		virtual void draw(output_method &om, const point &p, const point &size) = 0;
-
-		static std::shared_ptr<layout_item> create(lua::state &l);
+		point(int32_t x_, int32_t y_)
+			: x(x_), y(y_)
+		{}
 	};
 
-	/*
-	 * It expects to have a table at the top of lua stack. It then exports all the layout engines
-	 * into that table.
-	 */
-	void export_layout_engines(lua::state &l);
+	inline point operator+(const point &l, const point &r)
+	{ return { l.x+r.x, l.y+r.y }; }
+
+	inline point operator-(const point &l, const point &r)
+	{ return { l.x-r.x, l.y-r.y }; }
+
+	inline point min(const point &l, const point &r)
+	{ return { std::min(l.x, r.x), std::min(l.y, r.y) }; }
+
+	class output_method {
+	public:
+		virtual ~output_method() {}
+
+		virtual point get_text_size(const std::string &text) const = 0;
+		virtual void draw_text(const std::string &text, const point &p, const point &size) = 0;
+	};
 
 }
 
-#endif /* LAYOUT_ITEM_HH */
+#endif /* OUTPUT_METHOD_HH */
