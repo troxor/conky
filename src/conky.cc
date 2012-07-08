@@ -51,16 +51,6 @@
 #ifdef HAVE_SYS_INOTIFY_H
 #include <sys/inotify.h>
 #endif /* HAVE_SYS_INOTIFY_H */
-#ifdef BUILD_X11
-#include "x11.h"
-#include <X11/Xutil.h>
-#ifdef BUILD_XDAMAGE
-#include <X11/extensions/Xdamage.h>
-#endif
-#ifdef BUILD_IMLIB2
-#include "imlib2.h"
-#endif /* BUILD_IMLIB2 */
-#endif /* BUILD_X11 */
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
@@ -80,9 +70,6 @@
 #include "colours.h"
 #include "diskio.h"
 #include "exec.h"
-#ifdef BUILD_X11
-#include "fonts.h"
-#endif
 #ifdef BUILD_ICONV
 #include "iconv_tools.h"
 #endif
@@ -384,7 +371,7 @@ static const char *suffixes[] = {
 };
 
 
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 
 static void X11_create_window(void);
 
@@ -429,6 +416,7 @@ conky::range_config_setting<int> cpu_avg_samples("cpu_avg_samples", 1, 14, 2, tr
 conky::range_config_setting<int> net_avg_samples("net_avg_samples", 1, 14, 2, true);
 conky::range_config_setting<int> diskio_avg_samples("diskio_avg_samples", 1, 14, 2, true);
 
+#if 0 && X11 // XXX
 /* filenames for output */
 static conky::simple_config_setting<std::string> overwrite_file("overwrite_file",
 																std::string(), true);
@@ -436,6 +424,7 @@ static FILE *overwrite_fpointer = NULL;
 static conky::simple_config_setting<std::string> append_file("append_file",
 																std::string(), true);
 static FILE *append_fpointer = NULL;
+#endif
 
 #ifdef BUILD_HTTP
 std::string webpage;
@@ -582,11 +571,8 @@ int calc_text_width(const char *s)
 {
 	size_t slen = strlen(s);
 
-#ifdef BUILD_X11
-	if (not out_to_x.get(*state)) {
-#endif /* BUILD_X11 */
 		return slen;
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 	}
 #ifdef BUILD_XFT
 	if (use_xft.get(*state)) {
@@ -869,7 +855,7 @@ void generate_text_internal(char *p, int p_max_size, struct text_object root)
 
 		obj = obj->next;
 	}
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 	/* load any new fonts we may have had */
 	load_fonts(utf8_mode.get(*state));
 #endif /* BUILD_X11 */
@@ -890,6 +876,7 @@ void evaluate(const char *text, char *p, int p_max_size)
 
 double current_update_time, next_update_time, last_update_time;
 
+#if 0 && X11 // XXX
 static void generate_text(void)
 {
 	char *p;
@@ -949,13 +936,14 @@ static void generate_text(void)
 	last_update_time = current_update_time;
 	total_updates++;
 }
+#endif
 
 int get_string_width(const char *s)
 {
 	return *s ? calc_text_width(s) : 0;
 }
 
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 static inline int get_border_total()
 {
 	return border_inner_margin.get(*state) + border_outer_margin.get(*state) +
@@ -1132,10 +1120,7 @@ static void update_text_area(void)
 /* drawing stuff */
 
 static int cur_x, cur_y;	/* current x and y for drawing */
-#endif
-//draw_mode also without BUILD_X11 because we only need to print to stdout with FG
 static int draw_mode;		/* FG, BG or OUTLINE */
-#ifdef BUILD_X11
 static long current_color;
 
 static int text_size_updater(char *s, int special_index)
@@ -1215,7 +1200,7 @@ static int text_size_updater(char *s, int special_index)
 
 static inline void set_foreground_color(long c)
 {
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 	if (out_to_x.get(*state)) {
 #ifdef BUILD_ARGB
 		if (have_argb_visual) {
@@ -1248,6 +1233,8 @@ std::string string_replace_all(std::string original, std::string oldpart, std::s
 	}
 	return original;
 }
+
+#if 0
 
 static void draw_string(const char *s)
 {
@@ -2021,6 +2008,8 @@ static void update_text(void)
 	llua_update_info(&info, active_update_interval());
 }
 
+#endif
+
 #ifdef HAVE_SYS_INOTIFY_H
 int inotify_fd;
 #endif
@@ -2067,7 +2056,7 @@ static void main_loop(void)
 		}
 #endif
 
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 		if (out_to_x.get(*state)) {
 			XFlush(display);
 
@@ -2390,15 +2379,15 @@ static void main_loop(void)
 #endif /* BUILD_X11 */
 			t = (next_update_time - get_time()) * 1000000;
 			if(t > 0) usleep((useconds_t)t);
-			update_text();
-			draw_stuff();
+// X11			update_text();
+// X11			draw_stuff();
 #ifdef BUILD_NCURSES
 			if(out_to_ncurses.get(*state)) {
 				refresh();
 				clear();
 			}
 #endif
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 		}
 #endif /* BUILD_X11 */
 
@@ -2419,7 +2408,7 @@ static void main_loop(void)
 			case SIGTERM:
 				NORM_ERR("received SIGINT or SIGTERM to terminate. bye!");
 				terminate = 1;
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 				if (out_to_x.get(*state)) {
 					XDestroyRegion(x11_stuff.region);
 					x11_stuff.region = NULL;
@@ -2524,7 +2513,7 @@ static void reload_config(void)
 	initialisation(argc_copy, argv_copy);
 }
 
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 void clean_up_x11(void)
 {
 	if(window_created == 1) {
@@ -2559,7 +2548,7 @@ void clean_up_without_threads(void *memtofree1, void* memtofree2)
 	free_and_zero(memtofree2);
 
 	free_and_zero(info.cpu_usage);
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 	if(out_to_x.get(*state))
 		clean_up_x11();
 	else
@@ -2632,7 +2621,7 @@ static void set_default_configurations(void)
 	info.users.number = 1;
 }
 
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 static void X11_create_window(void)
 {
 	if (out_to_x.get(*state)) {
@@ -2890,7 +2879,7 @@ void initialisation(int argc, char **argv) {
 				state->pushboolean(true);
 				fork_to_background.lua_set(*state);
 				break;
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 			case 'f':
 				state->pushstring(optarg);
 				font.lua_set(*state);
@@ -3004,7 +2993,7 @@ void initialisation(int argc, char **argv) {
 	tmpstring2 = (char*)malloc(text_buffer_size.get(*state));
 	memset(tmpstring2, 0, text_buffer_size.get(*state));
 
-#ifdef BUILD_X11
+#if 0 && BUILD_X11
 	X11_create_window();
 #endif /* BUILD_X11 */
 	llua_setup_info(&info, active_update_interval());
