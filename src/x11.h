@@ -38,6 +38,7 @@
 #include <X11/extensions/Xdbe.h>
 #endif
 
+#include "output-method.hh"
 #include "setting.hh"
 #include "colours.h"
 
@@ -251,6 +252,16 @@ extern priv::use_xdbe_setting					 use_xdbe;
 #else
 extern priv::use_xpmdb_setting					 use_xpmdb;
 #endif
+
+namespace conky {
+
+	class x11_output: public output_method {
+	public:
+		virtual point get_text_size(const std::string &text) const;
+		virtual void draw_text(const std::string &text, const point &p, const point &size);
+	};
+
+}
 
 #endif /*X11_H_*/
 #endif /* BUILD_X11 */
