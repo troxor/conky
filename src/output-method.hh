@@ -24,6 +24,9 @@
 #ifndef OUTPUT_METHOD_HH
 #define OUTPUT_METHOD_HH
 
+#include <memory>
+#include <vector>
+
 namespace conky {
 
 	struct point {
@@ -54,8 +57,15 @@ namespace conky {
 
 		virtual point get_text_size(const std::string &text) const = 0;
 		virtual void draw_text(const std::string &text, const point &p, const point &size) = 0;
+		
+		/**
+		 * Returns a file descriptor which is used in the main loop in select() to wait for
+		 * events
+		 */
+		virtual int get_fd() { return -1; }
 	};
 
+	inline const std::vector<std::shared_ptr<output_method>> get_output_methods() { return {}; }
 }
 
 #endif /* OUTPUT_METHOD_HH */

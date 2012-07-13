@@ -97,6 +97,7 @@
 
 #include "lua-config.hh"
 #include "setting.hh"
+#include "output-method.hh"
 
 /* check for OS and include appropriate headers */
 #if defined(__linux__)
@@ -2014,7 +2015,7 @@ static void update_text(void)
 int inotify_fd;
 #endif
 
-static void main_loop(void)
+void old_main_loop(void)
 {
 	int terminate = 0;
 #ifdef SIGNAL_BLOCKING
@@ -3018,6 +3019,50 @@ void initialisation(int argc, char **argv) {
 	}
 
 	llua_startup_hook();
+}
+
+static void main_loop()
+{
+	bool terminate = false;
+
+	auto last_update = std::chrono::high_resolution_clock::now();
+
+	while(not terminate) {
+		const auto &om = conky::get_output_methods();
+
+		/*
+		for(auto i = om.begin(); i != om.end(); ++i)
+			(*i)->do_stuff();
+		 */
+
+		auto now = std::chrono::high_resolution_clock::now();
+		std::chrono::milliseconds aui((int)active_update_interval());
+		if(last_update <= now && (now-last_update) < aui) {
+			fd_set readfds;
+			FD_ZERO(&readfds);
+
+			int maxfd = 0;
+			for(auto i = om.begin(); i != om.end(); ++i) {
+				int fd = (*i)->get_fd();
+				if(fd >= 0)
+					FD_SET(fd, &readfds);
+				maxfd = std::max(fd+1, maxfd);
+			}
+
+			
+			struct timespec timeout;
+			auto sleep_for = aui - (now-last_update);
+
+			auto sec = std::chrono::duration_cast<std::chrono::seconds>(sleep_for);
+			timeout.tv_sec = sec.count();
+			sleep_for -= sec;
+
+			timeout.tv_nsec
+				= std::chrono::duration_cast<std::chrono::nanoseconds>(sleep_for).count();
+
+//			int r = pselect(maxfd, &readfds, NULL, NULL, &timeout, NULL);
+		}
+	}
 }
 
 int main(int argc, char **argv)
