@@ -133,9 +133,6 @@ namespace { const char builtin_config_magic[] = "==builtin=="; }
 
 #define MAX_IF_BLOCK_DEPTH 5
 
-//#define SIGNAL_BLOCKING
-#undef SIGNAL_BLOCKING
-
 /* debugging level, used by logging.h */
 int global_debug_level = 0;
 
@@ -2018,9 +2015,6 @@ int inotify_fd;
 void old_main_loop(void)
 {
 	int terminate = 0;
-#ifdef SIGNAL_BLOCKING
-	sigset_t newmask, oldmask;
-#endif
 	double t;
 #ifdef HAVE_SYS_INOTIFY_H
 	int inotify_config_wd = -1;
@@ -2029,13 +2023,6 @@ void old_main_loop(void)
 	char inotify_buff[INOTIFY_BUF_LEN];
 #endif /* HAVE_SYS_INOTIFY_H */
 
-
-#ifdef SIGNAL_BLOCKING
-	sigemptyset(&newmask);
-	sigaddset(&newmask, SIGINT);
-	sigaddset(&newmask, SIGTERM);
-	sigaddset(&newmask, SIGUSR1);
-#endif
 
 	last_update_time = 0.0;
 	next_update_time = get_time();
@@ -2049,13 +2036,6 @@ void old_main_loop(void)
 			on_battery = (buf[0] == 'D');
 		}
 		info.looped++;
-
-#ifdef SIGNAL_BLOCKING
-		/* block signals.  we will inspect for pending signals later */
-		if (sigprocmask(SIG_BLOCK, &newmask, &oldmask) < 0) {
-			CRIT_ERR(NULL, NULL, "unable to sigprocmask()");
-		}
-#endif
 
 #if 0 && BUILD_X11
 		if (out_to_x.get(*state)) {
@@ -2391,13 +2371,6 @@ void old_main_loop(void)
 #if 0 && BUILD_X11
 		}
 #endif /* BUILD_X11 */
-
-#ifdef SIGNAL_BLOCKING
-		/* unblock signals of interest and let handler fly */
-		if (sigprocmask(SIG_SETMASK, &oldmask, NULL) < 0) {
-			CRIT_ERR(NULL, NULL, "unable to sigprocmask()");
-		}
-#endif
 
 		switch (g_signal_pending) {
 			case SIGHUP:
@@ -3025,9 +2998,17 @@ static void main_loop()
 {
 	bool terminate = false;
 
+	// block some signals
+	// we poll them later manually
+	sigset_t sigmask;
+	sigemptyset(&sigmask);
+	sigaddset(&sigmask, SIGINT);
+	pthread_sigmask(SIG_BLOCK, &sigmask, NULL);
+
 	auto last_update = std::chrono::high_resolution_clock::now();
 
 	while(not terminate) {
+		struct timespec timeout;
 		const auto &om = conky::get_output_methods();
 
 		/*
@@ -3035,9 +3016,27 @@ static void main_loop()
 			(*i)->do_stuff();
 		 */
 
+		// handle signals
+		timeout.tv_sec = 0;
+		timeout.tv_nsec = 0;
+		switch(sigtimedwait(&sigmask, NULL, &timeout)) {
+			case SIGINT:
+				terminate = 1;
+				break;
+
+			case -1:
+				if(errno!=EAGAIN && errno!=EINTR)
+					throw errno_error("sigtimedwait");
+		}
+
+
 		auto now = std::chrono::high_resolution_clock::now();
-		std::chrono::milliseconds aui((int)active_update_interval());
+		std::chrono::milliseconds aui((int)(1000*active_update_interval()));
+		int r = 0;
 		if(last_update <= now && (now-last_update) < aui) {
+			// It is too early to update right now. Wait for the correct amount of time
+			// We allow the output methods to interrupt us if they need to do some work
+			// XXX: should we put them in a separate thread ?
 			fd_set readfds;
 			FD_ZERO(&readfds);
 
@@ -3048,9 +3047,7 @@ static void main_loop()
 					FD_SET(fd, &readfds);
 				maxfd = std::max(fd+1, maxfd);
 			}
-
 			
-			struct timespec timeout;
 			auto sleep_for = aui - (now-last_update);
 
 			auto sec = std::chrono::duration_cast<std::chrono::seconds>(sleep_for);
@@ -3060,8 +3057,18 @@ static void main_loop()
 			timeout.tv_nsec
 				= std::chrono::duration_cast<std::chrono::nanoseconds>(sleep_for).count();
 
-//			int r = pselect(maxfd, &readfds, NULL, NULL, &timeout, NULL);
+			r = pselect(maxfd, &readfds, NULL, NULL, &timeout, NULL);
 		}
+		if(r < 0) {
+			// some error occured. We cannot continue like this
+			if(errno != EINTR)
+				throw errno_error("pselect");
+		} else if(r == 0) {
+			// timeout expired, time to collect new data
+			conky::run_all_callbacks();
+			last_update = std::chrono::high_resolution_clock::now();
+		}
+		// else begin a new iteration of the loop
 	}
 }
 
