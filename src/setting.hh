@@ -30,6 +30,7 @@
 
 #include "logging.h"
 #include "luamm.hh"
+#include "thread.hh"
 
 namespace conky {
 

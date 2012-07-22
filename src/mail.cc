@@ -145,7 +145,7 @@ namespace {
 			throw std::runtime_error("Unable to connect to mail server");
 		}
 
-		virtual void merge(callback_base &&other)
+		virtual void merge(thread_base &&other)
 		{
 			mail_cb &&o = dynamic_cast<mail_cb &&>(other);
 			if(retries < o.retries) {

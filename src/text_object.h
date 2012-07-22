@@ -87,7 +87,7 @@ public:
         : Base(period, true, Base::Tuple(fn))
     {}
 };
-typedef conky::callback_handle<legacy_cb> legacy_cb_handle;
+typedef conky::thread_handle<legacy_cb> legacy_cb_handle;
 
 struct text_object {
 	struct text_object *next, *prev;	/* doubly linked list of text objects */

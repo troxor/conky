@@ -3065,7 +3065,7 @@ static void main_loop()
 				throw errno_error("pselect");
 		} else if(r == 0) {
 			// timeout expired, time to collect new data
-			conky::run_all_callbacks();
+			// XXX conky::run_all_callbacks();
 			last_update = std::chrono::high_resolution_clock::now();
 		}
 		// else begin a new iteration of the loop

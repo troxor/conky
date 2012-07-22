@@ -298,7 +298,7 @@ void update_stuff(void)
 
 	prepare_update();
 
-	conky::run_all_callbacks();
+	conky::callbacks.run_all_threads();
 
 	/* XXX: move the following into the update_meminfo() functions? */
 	if (no_buffers.get(*state)) {
