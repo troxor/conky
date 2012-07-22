@@ -44,14 +44,8 @@ namespace {
 			// we emulate O_CLOEXEC if the system does not have it
 			// not very thread-safe, but at least it works
 
-			for(int i = 0; i < 2; ++i) {
-				int r = fcntl(pipefd[i], F_GETFD);
-				if(r == -1)
-					return -1;
-
-				if(fcntl(pipefd[i], F_SETFD, r | FD_CLOEXEC) == -1)
-					return -1;
-			}
+			for(int i = 0; i < 2; ++i)
+				fcntl_setfd(pipefd[i], fcntl_getfd(pipefd[i]) | FD_CLOEXEC);
 		}
 
 		return 0;
@@ -62,6 +56,23 @@ namespace {
 #else
 	int (* const pipe2_ptr)(int[2], int) = &pipe2;
 #endif
+
+namespace priv {
+	int fcntl_getf(int fd, int what)
+	{
+		int r = fcntl(fd, what);
+		if(r == -1)
+			throw errno_error("fcntl");
+
+		return r;
+	}
+
+	void fcntl_setf(int fd, int what, int flags)
+	{
+		if(fcntl(fd, what, flags) == -1)
+			throw errno_error("fcntl");
+	}
+}
 
 std::string strerror_r(int errnum)
 {

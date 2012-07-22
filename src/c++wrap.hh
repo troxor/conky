@@ -35,8 +35,19 @@ enum { O_CLOEXEC = 02000000 };
 #include <string>
 #include <utility>
 
+namespace priv {
+	int fcntl_getf(int fd, int what);
+	void fcntl_setf(int fd, int what, int flags);
+}
+
 std::string strerror_r(int errnum);
 std::pair<int, int> pipe2(int flags);
+
+inline int fcntl_getfl(int fd) { return priv::fcntl_getf(fd, F_GETFL); }
+inline void fcntl_setfl(int fd, int flags) { priv::fcntl_setf(fd, F_GETFL, flags); }
+
+inline int fcntl_getfd(int fd) { return priv::fcntl_getf(fd, F_GETFD); }
+inline void fcntl_setfd(int fd, int flags) { priv::fcntl_setf(fd, F_GETFD, flags); }
 
 class errno_error: public std::runtime_error {
 	typedef std::runtime_error Base;
