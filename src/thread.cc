@@ -33,6 +33,15 @@ namespace conky {
 		enum {UNUSED_MAX = 5};
 	}
 
+	thread_base::thread_base(size_t hash_, uint32_t period_, bool wait_, bool use_pipe)
+		: thread(NULL), hash(hash_), period(period_), remaining(0),
+		  pipefd(use_pipe ? pipe2(O_CLOEXEC) : std::pair<int, int>(-1, -1)),
+		  wait(wait_), done(false), unused(0)
+	{
+		if(use_pipe)
+			fcntl_setfl(pipefd.second, fcntl_getfl(pipefd.second) | O_NONBLOCK);
+	}
+
 	thread_base::~thread_base()
 	{
 		stop();
@@ -44,6 +53,8 @@ namespace conky {
 			thread = new std::thread(&thread_base::start_routine, this, std::ref(sem_wait));
 
 		sem_start.post();
+		if(pipefd.second >= 0)
+			write(pipefd.second, "T", 1);
 	}
 
 	void thread_base::start_routine(semaphore &sem_wait)
@@ -68,8 +79,10 @@ namespace conky {
 		if(thread) {
 			done = true;
 			sem_start.post();
-			if(pipefd.second >= 0)
+			if(pipefd.second >= 0) {
+				fcntl_setfl(pipefd.second, fcntl_getfl(pipefd.second) & ~O_NONBLOCK);
 				write(pipefd.second, "X", 1);
+			}
 			thread->join();
 			delete thread;
 			thread = NULL;
@@ -103,6 +116,17 @@ namespace conky {
 		}
 		assert(wait == other.wait);
 		unused = 0;
+	}
+
+	thread_base::signal thread_base::get_signal()
+	{
+		char s;
+		read(signalfd(), &s, 1);
+		switch(s) {
+			case 'X': return DONE;
+			case 'T': return NEXT;
+			default: throw std::logic_error("thread_base: Unknown signal.");
+		}
 	}
 
 	thread_container::handle thread_container::do_register_thread(const handle &h)

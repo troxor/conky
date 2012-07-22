@@ -80,6 +80,8 @@ namespace conky {
 		friend class thread_container;
 
 	protected:
+		enum signal { DONE, NEXT };
+
 		/*
 		 * Construct a new thread. Parameters:
 		 * - hash: the hash value of this thread. Only threads with the same hash are considered
@@ -87,18 +89,18 @@ namespace conky {
 		 * - period: the periodicity of this thread. Every period-th call to
 		 *   container.run_all_threads() calls work() in this thread.
 		 * - wait: should run_all_threads() wait for work() to complete before returning?
-		 * - use_pipe: should the container use a pipe to signal this thread to terminate? One
-		 *   can then use select() on the descriptor returned by donefd() to wait for the
-		 *   termination signal.
+		 * - use_pipe: should the container use a pipe to signal this thread to? One
+		 *   can then use select() on the descriptor returned by signalfd() to wait for the
+		 *   termination or the start-next-iteration signal. In the former case, an 'X' is
+		 *   written to the pipe. In the latter: 'T'.
 		 */
-		thread_base(size_t hash_, uint32_t period_, bool wait_, bool use_pipe)
-			: thread(NULL), hash(hash_), period(period_), remaining(0),
-			  pipefd(use_pipe ? pipe2(O_CLOEXEC) : std::pair<int, int>(-1, -1)),
-			  wait(wait_), done(false), unused(0)
-		{}
+		thread_base(size_t hash_, uint32_t period_, bool wait_, bool use_pipe);
 
-		int donefd()
+		int signalfd()
 		{ return pipefd.first; }
+
+		// If there is no signal on signalfd(), it will block.
+		signal get_signal();
 
 		bool is_done()
 		{ return done; }

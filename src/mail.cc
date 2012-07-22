@@ -821,9 +821,10 @@ void imap_cb::work()
 				DBGP2("idling...");
 				FD_ZERO(&fdset);
 				FD_SET(sockfd, &fdset);
-				FD_SET(donefd(), &fdset);
-				res = select(std::max(sockfd, donefd()) + 1, &fdset, NULL, NULL, &fetchtimeout);
-				if ((res == -1 && errno == EINTR) || FD_ISSET(donefd(), &fdset)) {
+				FD_SET(signalfd(), &fdset);
+				res = select(std::max(sockfd, signalfd()) + 1, &fdset, NULL, NULL, &fetchtimeout);
+				if ((res == -1 && errno == EINTR)
+						|| (FD_ISSET(signalfd(), &fdset) && get_signal() == DONE)) {
 					try {
 						command(sockfd, "DONE\r\n", recvbuf, "a5 OK");
 						command(sockfd, "a3 LOGOUT\r\n", recvbuf, "a3 OK");
