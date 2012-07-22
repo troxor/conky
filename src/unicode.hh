@@ -42,13 +42,13 @@ class unicode_converter {
 	static std::locale locale;
 	static const codecvt &converter;
 
-	__gnu_cxx::encoding_state state;
+	mutable __gnu_cxx::encoding_state state;
 
 public:
 	unicode_converter();	
 
-	std::string to_utf8(const std::u32string &str);
-	std::u32string to_utf32(const std::string &str);
+	std::string to_utf8(const std::u32string &str) const;
+	std::u32string to_utf32(const std::string &str) const;
 };
 
 #endif /* UNICODE_HH */

@@ -38,7 +38,7 @@ unicode_converter::unicode_converter()
 	: state("UTF-8", UTF32)
 { }
 
-std::string unicode_converter::to_utf8(const std::u32string &in)
+std::string unicode_converter::to_utf8(const std::u32string &in) const
 {
 	std::string out;
 	out.resize(in.length()*6);
@@ -54,7 +54,7 @@ std::string unicode_converter::to_utf8(const std::u32string &in)
 	return out;
 }
 
-std::u32string unicode_converter::to_utf32(const std::string &in)
+std::u32string unicode_converter::to_utf32(const std::string &in) const
 {
 	std::u32string out;
 	out.resize(in.length());
