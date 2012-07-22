@@ -3009,7 +3009,7 @@ static void main_loop()
 
 	while(not terminate) {
 		struct timespec timeout;
-		const auto &om = conky::get_output_methods();
+		const auto &om = conky::output_method::get_methods();
 
 		/*
 		for(auto i = om.begin(); i != om.end(); ++i)

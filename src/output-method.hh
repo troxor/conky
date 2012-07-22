@@ -24,7 +24,9 @@
 #ifndef OUTPUT_METHOD_HH
 #define OUTPUT_METHOD_HH
 
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace conky {
@@ -52,6 +54,12 @@ namespace conky {
 	{ return { std::min(l.x, r.x), std::min(l.y, r.y) }; }
 
 	class output_method {
+		static std::vector<std::shared_ptr<output_method>> methods;
+
+	protected:
+		static void register_method(std::shared_ptr<output_method> method)
+		{ methods.push_back(method); }
+
 	public:
 		virtual ~output_method() {}
 
@@ -63,9 +71,9 @@ namespace conky {
 		 * events
 		 */
 		virtual int get_fd() { return -1; }
-	};
 
-	inline const std::vector<std::shared_ptr<output_method>> get_output_methods() { return {}; }
+		static const std::vector<std::shared_ptr<output_method>> &get_methods() { return methods; }
+	};
 }
 
 #endif /* OUTPUT_METHOD_HH */

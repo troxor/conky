@@ -42,7 +42,7 @@ set(conky_sources c++wrap.cc colours.cc combine.cc common.cc conky.cc core.cc
 	mboxscan.cc read_tcpip.cc scroll.cc specials.cc tailhead.cc temphelper.cc
 	text_object.cc timeinfo.cc top.cc algebra.cc prioqueue.cc proc.cc user.cc
 	luamm.cc data-source.cc lua-config.cc setting.cc llua.cc update-cb.cc
-	layout-item.cc table-layout.cc unicode.cc)
+	layout-item.cc table-layout.cc unicode.cc output-method.cc)
 
 # Platform specific sources
 if(OS_LINUX)
