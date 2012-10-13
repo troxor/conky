@@ -25,4 +25,4 @@
 
 #include "update-cb.hh"
 
-conky::thread_container conky::callbacks;
+conky::thread_container<> conky::callbacks;

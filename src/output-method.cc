@@ -26,5 +26,8 @@
 #include "output-method.hh"
 
 namespace conky {
-	std::vector<std::shared_ptr<output_method>> output_method::methods;
+	thread_container<output_method, false> output_methods;
+
+	int output_method::get_fd()
+	{ return -1; }
 }

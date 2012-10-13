@@ -77,6 +77,7 @@ namespace conky {
 			delete ptr;
 		}
 
+		template<typename Thread, bool auto_delete>
 		friend class thread_container;
 
 	protected:
@@ -128,6 +129,7 @@ namespace conky {
 			: Base(std::move(ptr))
 		{}
 
+		template<typename Thread_, bool auto_delete>
 		friend class thread_container;
 	public:
 
@@ -139,11 +141,17 @@ namespace conky {
 	 * Threads are registered with the register_thread() function. You pass the class name as the
 	 * template parameter, and any additional parameters to the constructor as function
 	 * parameters. The period parameter specifies how often the thread will run.
-	 * register_thread() returns a handle to the newly created object. As long as someone holds
-	 * the object handle, the thread will be run.
+	 * register_thread() returns a handle to the newly created object. If auto_delete is true,
+	 * the thread will be run only as long as someone holds the object handle.
 	 */
+	template<typename Thread = thread_base, bool auto_delete = true>
 	class thread_container {
-		typedef thread_handle<thread_base> handle;
+		static_assert(std::is_base_of<thread_base, Thread>::value,
+				"Thread must be a descendant of thread_base");
+
+		enum {UNUSED_MAX = 5};
+
+		typedef thread_handle<Thread> handle;
 		typedef std::unordered_set<handle, size_t (*)(const handle &),
 								   bool (*)(const handle &, const handle &)>
 		Threads;
@@ -152,9 +160,27 @@ namespace conky {
 		Threads threads;
 
 		static size_t get_hash(const handle &h) { return h->hash; }
-		static bool is_equal(const handle &a, const handle &b);
+		static bool is_equal(const handle &a, const handle &b)
+		{
+			if(a->hash != b->hash)
+				return false;
 
-		handle do_register_thread(const handle &h);
+			if(typeid(*a) != typeid(*b))
+				return false;
+
+			return *a == *b;
+		}
+
+
+		handle do_register_thread(const handle &h)
+		{
+			const auto &p = threads.insert(h);
+
+			if(not p.second)
+				(*p.first)->merge(std::move(*h));
+
+			return *p.first;
+		}
 
 	public:
 		thread_container()
@@ -165,16 +191,19 @@ namespace conky {
 		 * Constructs a thread by passing the parameters to its constructor and registers it with
 		 * the container.
 		 */
-		template<typename Thread, typename... Params>
-		thread_handle<Thread> register_thread(uint32_t period, Params&&... params)
+		template<typename Thread_, typename... Params>
+		thread_handle<Thread_> register_thread(uint32_t period, Params&&... params)
 		{
-			static_assert(std::is_base_of<thread_base, Thread>::value,
-					"Thread must be a descendant of thread_base");
+			static_assert(std::is_base_of<Thread, Thread_>::value,
+					"Thread_ must be a descendant of Thread");
 
-			return std::dynamic_pointer_cast<Thread>(do_register_thread(
-						handle(new Thread(period, std::forward<Params>(params)...))
+			return std::dynamic_pointer_cast<Thread_>(do_register_thread(
+						handle(new Thread_(period, std::forward<Params>(params)...))
 					));
 		}
+
+		const Threads &get_threads() const
+		{ return threads; }
 
 		void run_all_threads();
 	};
@@ -228,6 +257,34 @@ namespace conky {
 			  tuple(tuple_)
 		{}
 	};
+
+
+	template<typename Thread, bool auto_delete>
+	void thread_container<Thread, auto_delete>::run_all_threads()
+	{
+		size_t wait = 0;
+		for(auto i = threads.begin(); i != threads.end(); ) {
+			thread_base &thr = **i;
+
+			if(thr.remaining-- == 0) {
+				if(!auto_delete || !i->unique() || ++thr.unused < UNUSED_MAX) {
+					thr.remaining = thr.period-1;
+					thr.run(sem_wait);
+					if(thr.wait)
+						++wait;
+				}
+			}
+			if(auto_delete && thr.unused == UNUSED_MAX) {
+				auto t = i;
+				++i;
+				threads.erase(t);
+			} else
+				++i;
+		}
+
+		while(wait-- > 0)
+			sem_wait.wait();
+	}
 }
 
 #endif /* THREAD_HH */

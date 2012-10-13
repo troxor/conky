@@ -90,7 +90,7 @@ namespace conky {
 		}
 	};
 
-	extern thread_container callbacks;
+	extern thread_container<> callbacks;
 	template<typename Callback, typename... Params>
 	thread_handle<Callback> register_cb(uint32_t period, Params&&... params)
 	{

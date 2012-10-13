@@ -29,6 +29,8 @@
 #include <string>
 #include <vector>
 
+#include "thread.hh"
+
 namespace conky {
 
 	struct point {
@@ -53,15 +55,11 @@ namespace conky {
 	inline point min(const point &l, const point &r)
 	{ return { std::min(l.x, r.x), std::min(l.y, r.y) }; }
 
-	class output_method {
-		static std::vector<std::shared_ptr<output_method>> methods;
-
-	protected:
-		static void register_method(std::shared_ptr<output_method> method)
-		{ methods.push_back(method); }
-
+	class output_method: public thread_base {
 	public:
-		virtual ~output_method() {}
+		output_method(bool use_pipe)
+			: thread_base(reinterpret_cast<size_t>(this), 1, false, use_pipe)
+		{}
 
 		virtual point get_text_size(const std::string &text) const = 0;
 		virtual void draw_text(const std::string &text, const point &p, const point &size) = 0;
@@ -70,10 +68,10 @@ namespace conky {
 		 * Returns a file descriptor which is used in the main loop in select() to wait for
 		 * events
 		 */
-		virtual int get_fd() { return -1; }
-
-		static const std::vector<std::shared_ptr<output_method>> &get_methods() { return methods; }
+		virtual int get_fd();
 	};
+
+	extern thread_container<output_method, false> output_methods;
 }
 
 #endif /* OUTPUT_METHOD_HH */

@@ -29,10 +29,6 @@
 #include <typeinfo>
 
 namespace conky {
-	namespace {
-		enum {UNUSED_MAX = 5};
-	}
-
 	thread_base::thread_base(size_t hash_, uint32_t period_, bool wait_, bool use_pipe)
 		: thread(NULL), hash(hash_), period(period_), remaining(0),
 		  pipefd(use_pipe ? pipe2(O_CLOEXEC) : std::pair<int, int>(-1, -1)),
@@ -97,17 +93,6 @@ namespace conky {
 		}
 	}
 
-	bool thread_container::is_equal(const handle &a, const handle &b)
-	{
-		if(a->hash != b->hash)
-			return false;
-
-		if(typeid(*a) != typeid(*b))
-			return false;
-
-		return *a == *b;
-	}
-
 	void thread_base::merge(thread_base &&other)
 	{
 		if(other.period < period) {
@@ -127,43 +112,6 @@ namespace conky {
 			case 'T': return NEXT;
 			default: throw std::logic_error("thread_base: Unknown signal.");
 		}
-	}
-
-	thread_container::handle thread_container::do_register_thread(const handle &h)
-	{
-		const auto &p = threads.insert(h);
-
-		if(not p.second)
-			(*p.first)->merge(std::move(*h));
-
-		return *p.first;
-	}
-
-
-	void thread_container::run_all_threads()
-	{
-		size_t wait = 0;
-		for(auto i = threads.begin(); i != threads.end(); ) {
-			thread_base &thr = **i;
-
-			if(thr.remaining-- == 0) {
-				if(!i->unique() || ++thr.unused < UNUSED_MAX) {
-					thr.remaining = thr.period-1;
-					thr.run(sem_wait);
-					if(thr.wait)
-						++wait;
-				}
-			}
-			if(thr.unused == UNUSED_MAX) {
-				auto t = i;
-				++i;
-				threads.erase(t);
-			} else 
-				++i;
-		}
-
-		while(wait-- > 0)
-			sem_wait.wait();
 	}
 }
 
