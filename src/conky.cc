@@ -2640,11 +2640,7 @@ void load_config_file()
 		l.pushstring(current_config.c_str());
 		l.call(1, 1);
 #else
-		char *syntaxerr;
-		asprintf(&syntaxerr, _(SYNTAX_ERR_READ_CONF), e.what());
-		std::string syntaxerrobj(syntaxerr);
-		free(syntaxerr);
-		throw conky::error(syntaxerrobj);
+		throw conky::error(strprintf(_(SYNTAX_ERR_READ_CONF), e.what()));
 #endif
 	}
 	l.call(0, 0);

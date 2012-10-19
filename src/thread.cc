@@ -28,6 +28,8 @@
 #include <unistd.h>
 #include <typeinfo>
 
+#include "logging.h"
+
 namespace conky {
 	thread_base::thread_base(size_t hash_, uint32_t period_, bool wait_, bool use_pipe)
 		: thread(NULL), hash(hash_), period(period_), remaining(0),
@@ -49,8 +51,10 @@ namespace conky {
 			thread = new std::thread(&thread_base::start_routine, this, std::ref(sem_wait));
 
 		sem_start.post();
-		if(pipefd.second >= 0)
-			write(pipefd.second, "T", 1);
+		if(pipefd.second >= 0) {
+			if(write(pipefd.second, "T", 1) != 1)
+				NORM_ERR("Unable to signal thread tick. Is the thread stuck?");
+		}
 	}
 
 	void thread_base::start_routine(semaphore &sem_wait)
@@ -77,7 +81,8 @@ namespace conky {
 			sem_start.post();
 			if(pipefd.second >= 0) {
 				fcntl_setfl(pipefd.second, fcntl_getfl(pipefd.second) & ~O_NONBLOCK);
-				write(pipefd.second, "X", 1);
+				if(write(pipefd.second, "X", 1) != 1)
+					throw std::runtime_error("thread_base: unable to signal thread to terminate.");
 			}
 			thread->join();
 			delete thread;
@@ -106,7 +111,8 @@ namespace conky {
 	thread_base::signal thread_base::get_signal()
 	{
 		char s;
-		read(signalfd(), &s, 1);
+		if(read(signalfd(), &s, 1) != 1)
+			throw std::runtime_error("thread_base: unable to read signal.");
 		switch(s) {
 			case 'X': return DONE;
 			case 'T': return NEXT;

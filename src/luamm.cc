@@ -114,7 +114,7 @@ namespace lua {
 		 * replaced with some longjmp() magic. But that shouldn't be necessary, as this function
 		 * will not be called under normal conditions (we execute everything in protected mode).
 		 */
-		int panic_throw(lua_State *l)
+		int __attribute__((noreturn)) panic_throw(lua_State *l)
 		{
 			if(not lua_checkstack(l, 1))
 				throw std::bad_alloc();

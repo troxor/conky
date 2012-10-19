@@ -159,7 +159,7 @@ namespace conky {
 	point table_layout::size(const output_method &om)
 	{
 		point res;
-		int32_t ypos;
+		int32_t ypos = 0;
 		for(auto i = grid.begin(); i != grid.end(); ++i) {
 			int32_t height = 0;
 			int32_t xpos = 0;

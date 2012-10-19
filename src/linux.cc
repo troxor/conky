@@ -905,7 +905,7 @@ int update_cpu_usage(void)
 
 //fscanf() that reads floats with points even if you are using a locale where
 //floats are with commas
-int fscanf_no_i18n(FILE *stream, const char *format, ...) {
+int __attribute__((format(scanf, 2, 3))) fscanf_no_i18n(FILE *stream, const char *format, ...) {
 	int returncode;
 	va_list ap;
 

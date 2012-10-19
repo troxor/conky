@@ -513,7 +513,7 @@ std::unique_ptr<mail_param_ex> parse_mail_args(mail_type type, const char *arg)
 	using std::get;
 
 	std::unique_ptr<mail_param_ex> mail;
-	char *tmp;
+	const char *tmp;
 	char host[128];
 	char user[128];
 	char pass[128];
@@ -550,7 +550,7 @@ std::unique_ptr<mail_param_ex> parse_mail_args(mail_type type, const char *arg)
 	get<MP_PASS>(*mail) = pass;
 
 	// now we check for optional args
-	tmp = (char*)strstr(arg, "-r ");
+	tmp = strstr(arg, "-r ");
 	if (tmp) {
 		tmp += 3;
 		sscanf(tmp, "%" SCNu16, &mail->retries);
@@ -559,14 +559,14 @@ std::unique_ptr<mail_param_ex> parse_mail_args(mail_type type, const char *arg)
 	}
 
 	float interval = DEFAULT_MAIL_INTERVAL;
-	tmp = (char*)strstr(arg, "-i ");
+	tmp = strstr(arg, "-i ");
 	if (tmp) {
 		tmp += 3;
 		sscanf(tmp, "%f", &interval);
 	}
 	mail->period = std::max(lround(interval/active_update_interval()), 1l);
 
-	tmp = (char*)strstr(arg, "-p ");
+	tmp = strstr(arg, "-p ");
 	if (tmp) {
 		tmp += 3;
 		sscanf(tmp, "%" SCNu16, &get<MP_PORT>(*mail));
@@ -578,12 +578,12 @@ std::unique_ptr<mail_param_ex> parse_mail_args(mail_type type, const char *arg)
 		}
 	}
 	if (type == IMAP_TYPE) {
-		tmp = (char*)strstr(arg, "-f ");
+		tmp = strstr(arg, "-f ");
 		if (tmp) {
 			int len = 0;
 			tmp += 3;
 			if (tmp[0] == '\'') {
-				len = (char*)strstr(tmp + 1, "'") - tmp - 1;
+				len = strstr(tmp + 1, "'") - tmp - 1;
 				tmp++;
 			}
 			get<MP_FOLDER>(*mail).assign(tmp, len);
@@ -591,13 +591,13 @@ std::unique_ptr<mail_param_ex> parse_mail_args(mail_type type, const char *arg)
 			get<MP_FOLDER>(*mail) = "INBOX";	// default imap inbox
 		}
 	}
-	tmp = (char*)strstr(arg, "-e ");
+	tmp = strstr(arg, "-e ");
 	if (tmp) {
 		int len = 0;
 		tmp += 3;
 
 		if (tmp[0] == '\'') {
-			len = (char*)strstr(tmp + 1, "'") - tmp - 1;
+			len = strstr(tmp + 1, "'") - tmp - 1;
 		}
 		get<MP_COMMAND>(*mail).assign(tmp + 1, len);
 	}
@@ -752,7 +752,7 @@ void imap_cb::unseen_command(unsigned long old_unseen, unsigned long old_message
 
 void imap_cb::work()
 {
-	int sockfd, numbytes;
+	int sockfd = -1, numbytes;
 	char recvbuf[MAXDATASIZE];
 	unsigned long old_unseen = ULONG_MAX;
 	unsigned long old_messages = ULONG_MAX;
@@ -939,7 +939,7 @@ void print_imap_messages(struct text_object *obj, char *p, int p_max_size)
 
 void pop3_cb::work()
 {
-	int sockfd;
+	int sockfd = -1;
 	char recvbuf[MAXDATASIZE];
 	char *reply;
 	unsigned long old_unseen = ULONG_MAX;
