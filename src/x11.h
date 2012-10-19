@@ -144,10 +144,10 @@ namespace priv {
 		typedef conky::simple_config_setting<bool> Base;
 	
 	protected:
-		virtual void lua_setter(lua::state &l, bool init);
-		virtual void cleanup(lua::state &l);
+		virtual void cleanup();
 
 	public:
+		virtual const bool set(const bool &r, bool init);
 		out_to_x_setting()
 			: Base("out_to_x", true, false)
 		{}
@@ -156,10 +156,8 @@ namespace priv {
 	class own_window_setting: public conky::simple_config_setting<bool> {
 		typedef conky::simple_config_setting<bool> Base;
 	
-	protected:
-		virtual void lua_setter(lua::state &l, bool init);
-
 	public:
+		const bool set(const bool &r, bool init);
 		own_window_setting()
 			: Base("own_window", false, false)
 		{}
@@ -168,11 +166,10 @@ namespace priv {
 	class use_xdbe_setting: public conky::simple_config_setting<bool> {
 		typedef conky::simple_config_setting<bool> Base;
 	
-		bool set_up(lua::state &l);
-	protected:
-		virtual void lua_setter(lua::state &l, bool init);
+		bool set_up();
 
 	public:
+		virtual const bool set(const bool &r, bool init);
 		use_xdbe_setting()
 			: Base("double_buffer", false, false)
 		{}
@@ -181,11 +178,10 @@ namespace priv {
 	class use_xpmdb_setting: public conky::simple_config_setting<bool> {
 		typedef conky::simple_config_setting<bool> Base;
 	
-		bool set_up(lua::state &l);
-	protected:
-		virtual void lua_setter(lua::state &l, bool init);
+		bool set_up();
 
 	public:
+		virtual const bool set(const bool &r, bool init);
 		use_xpmdb_setting()
 			: Base("double_buffer", false, false)
 		{}
@@ -193,17 +189,16 @@ namespace priv {
 
 	
 	struct colour_traits {
-		static inline unsigned long
-		from_lua(lua::state &l, int index, const std::string &)
-		{ return get_x11_color(l.tostring(index)); }
+		static unsigned long
+		from_lua(lua::state &l, int index, const std::string &);
+
+		static void to_lua(lua::state &l, unsigned long, const std::string &)
+		{ l.pushstring("Operation not supported (yet)"); }
 	};
 
 	class colour_setting: public conky::simple_config_setting<unsigned long, colour_traits> {
 		typedef conky::simple_config_setting<unsigned long, colour_traits> Base;
 	
-	protected:
-		virtual void lua_setter(lua::state &l, bool init);
-
 	public:
 		colour_setting(const std::string &name_, unsigned long default_value_ = 0)
 			: Base(name_, default_value_, true)

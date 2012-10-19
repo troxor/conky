@@ -73,6 +73,17 @@ namespace conky {
 			&& static_cast<typename std::make_unsigned<Signed1>::type>(value) <= max;
 	}
 
+	template<typename Unsigned1, typename Signed2>
+	bool between(Unsigned1 value, Signed2 min,
+			typename std::enable_if<std::is_signed<Signed2>::value
+								&& std::is_unsigned<Unsigned1>::value, Signed2>::type max)
+	{
+		return max >= 0
+			&& value <= static_cast<typename std::make_unsigned<Signed2>::type>(max)
+			&& ( min <= 0
+				|| value >= static_cast<typename std::make_unsigned<Signed2>::type>(min) );
+	}
+
 	namespace priv {
 		void type_check(lua::state &l, int index, lua::Type type1, lua::Type type2,
 				const std::string &description);
@@ -103,6 +114,14 @@ namespace conky {
 
 			return t;
 		}
+
+		static void to_lua(lua::state &l, const T &t, const std::string &description)
+		{
+			if(not between(t, std::numeric_limits<lua::integer>::min(),
+						      std::numeric_limits<lua::integer>::max()))
+				throw conversion_error(std::string("Value out of range for " + description + '.'));
+			l.pushinteger(t);
+		}
 	};
 
 	// specialization for floating point types
@@ -115,6 +134,9 @@ namespace conky {
 
 			return l.tonumber(index);
 		}
+
+		static inline void to_lua(lua::state &l, const T &t, const std::string &)
+		{ l.pushnumber(t); }
 	};
 
 	// specialization for std::string
@@ -127,6 +149,9 @@ namespace conky {
 
 			return l.tostring(index);
 		}
+
+		static inline void to_lua(lua::state &l, const std::string &t, const std::string &)
+		{ l.pushstring(t); }
 	};
 
 	// specialization for bool
@@ -139,6 +164,9 @@ namespace conky {
 
 			return l.toboolean(index);
 		}
+
+		static inline void to_lua(lua::state &l, bool t, const std::string &)
+		{ l.pushboolean(t); }
 	};
 
 	// specialization for enums
@@ -170,6 +198,17 @@ namespace conky {
 			msg += '.';
 			throw conversion_error(msg);
 		}
+
+		static void to_lua(lua::state &l, const T &t, const std::string &description)
+		{
+			for(auto i = map.begin(); i != map.end(); ++i) {
+				if(i->second == t) {
+					l.pushstring(i->first);
+					return;
+				}
+			}
+			throw conversion_error("Invalid value for " + description + ".");
+		}
 	};
 
 	template<typename T, typename Traits = lua_traits<T>>
@@ -180,6 +219,7 @@ namespace conky {
 		class config_setting_base {
 		private:
 			static void process_setting(lua::state &l, bool init);
+			static int config__index(lua::state *l);
 			static int config__newindex(lua::state *l);
 			static void make_conky_config(lua::state &l);
 
@@ -190,18 +230,25 @@ namespace conky {
 		protected:
 			/*
 			 * Set the setting, if the value is sane
-			 * stack on entry: | ... potential_new_value old_value |
-			 * stack on exit:  | ... real_new_value |
-			 * real_new_value can be the old value if the new value doesn't make sense
+			 * stack on entry: | ... new_value |
+			 * stack on exit:  | ... |
+			 * if the new value doesn't make sense, this function can ignore/alter it
 			 */
 			virtual void lua_setter(lua::state &l, bool init) = 0;
 
 			/*
+			 * Push the current value of the setting to the stack
+			 * stack on entry: | ... |
+			 * stack on exit:  | ... new_value |
+			 */
+			virtual void lua_getter(lua::state &l) = 0;
+
+			/*
 			 * Called on exit/restart.
-			 * stack on entry: | ... new_value |
+			 * stack on entry: | ... |
 			 * stack on exit:  | ... |
 			 */
-			virtual void cleanup(lua::state &l) { l.pop(); }
+			virtual void cleanup() { }
 
 		public:
 			const std::string name;
@@ -228,39 +275,43 @@ namespace conky {
 	// If you need some very exotic setting, derive it from this class. Otherwise, scroll down.
 	template<typename T>
 	class config_setting_template: public priv::config_setting_base {
+	private:
+		class accessor {
+		private:
+			config_setting_template &setting;
+
+			accessor(const accessor &r) : setting(r.setting) {}
+			accessor& operator=(const accessor &) = delete;
+
+		public:
+			accessor(config_setting_template &setting_)
+				: setting(setting_)
+			{}
+
+			operator const T&() const { return setting.get(); }
+			const T operator=(const T &r) { return setting.set(r); }
+
+			friend class config_setting_template;
+		};
 	public:
 		explicit config_setting_template(const std::string &name_)
 			: config_setting_base(name_)
 		{}
 
-		// get the value of the setting as a C++ type
-		T get(lua::state &l);
+		// get the value of the setting
+		const T& get() { return value; }
+		// set the value of the setting
+		virtual const T set(const T &r, bool /*init*/ = false) { return value = r; }
+
+		accessor operator*() { return accessor(*this); }
+		const T& operator*() const { return value; }
+
+		T* operator->() { return &value; }
+		const T* operator->() const { return &value; }
 
 	protected:
-		/*
-		 * Convert the value into a C++ type.
-		 * stack on entry: | ... value |
-		 * stack on exit:  | ... |
-		 */
-		virtual T getter(lua::state &l) = 0;
+		T value;
 	};
-
-	template<typename T>
-	T config_setting_template<T>::get(lua::state &l)
-	{
-		std::lock_guard<lua::state> guard(l);
-		lua::stack_sentry s(l);
-		l.checkstack(2);
-
-		l.getglobal("conky");
-		l.getfield(-1, "config");
-		l.replace(-2);
-
-		l.getfield(-1, name.c_str());
-		l.replace(-2);
-
-		return getter(l);
-	}
 
 	/*
 	 * Declares a setting <name> in the conky.config table.
@@ -285,33 +336,23 @@ namespace conky {
 			: Base(name_), default_value(default_value_), modifiable(modifiable_)
 		{}
 
+		virtual const T set_default(bool init = false)
+		{ return set(default_value, init); }
+
 	protected:
 		const T default_value;
 		const bool modifiable;
 
 		virtual std::pair<T, bool> do_convert(lua::state &l, int index);
 		virtual void lua_setter(lua::state &l, bool init);
-
-		virtual T getter(lua::state &l)
-		{
-			lua::stack_sentry s(l, -1);
-			auto ret = do_convert(l, -1);
-			l.pop();
-
-			// setter function should make sure the value is valid
-			assert(ret.second);
-
-			return ret.first;
-		}
+		virtual void lua_getter(lua::state &l)
+		{ Traits::to_lua(l, Base::get(), "setting '" + Base::name + '\''); }
 	};
 
 	template<typename T, typename Traits>
 	std::pair<T, bool>
 	simple_config_setting<T, Traits>::do_convert(lua::state &l, int index)
 	{
-		if(l.isnil(index))
-			return {default_value, true};
-
 		try {
 			return { Traits::from_lua(l, index, "setting '" + Base::name + '\''), true };
 		}
@@ -324,19 +365,19 @@ namespace conky {
 	template<typename T, typename Traits>
 	void simple_config_setting<T, Traits>::lua_setter(lua::state &l, bool init)
 	{
-		lua::stack_sentry s(l, -2);
+		lua::stack_sentry s(l, -1);
 
-		bool ok = true;
-		if(!init && !modifiable) {
+		if(!init && !modifiable)
 			NORM_ERR("Setting '%s' is not modifiable", Base::name.c_str());
-			ok = false;
+		else {
+			if(l.isnil(-1))
+				set_default(init);
+			else {
+				auto r = do_convert(l, -1);
+				if(r.second)
+					set(r.first, init);
+			}
 		}
-
-		if(ok && do_convert(l, -2).second)
-			l.pop();
-		else
-			l.replace(-2);
-		++s;
 	}
 
 	// Just like simple_config_setting, except that in only accepts value in the [min, max] range
@@ -355,17 +396,15 @@ namespace conky {
 			: Base(name_, default_value_, modifiable_), min(min_), max(max_)
 		{ assert(min <= Base::default_value && Base::default_value <= max); }
 
-	protected:
-		virtual std::pair<T, bool> do_convert(lua::state &l, int index)
+		virtual const T set(const T &r, bool init)
 		{
-			auto ret = Base::do_convert(l, index);
-			if(ret.second && !between(ret.first, min, max)) {
+			if(!between(r, min, max)) {
 				NORM_ERR("Value is out of range for setting '%s'", Base::name.c_str());
 				// we ignore out-of-range values. an alternative would be to clamp them. do we
 				// want to do that?
-				ret.second = false;
+				return Base::value;
 			}
-			return ret;
+			return Base::set(r, init);
 		}
 	};
 

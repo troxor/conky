@@ -51,9 +51,9 @@ void print_mysql(struct text_object *obj, char *p, int p_max_size) {
 		mysql_library_end();
 		return;
 	}
-	if (!mysql_real_connect(conn, host.get(*state).c_str(), user.get(*state).c_str(),
-				password.get(*state).c_str(), db.get(*state).c_str(),
-				port.get(*state), NULL, 0)) {
+	if (!mysql_real_connect(conn, *host.c_str(), *user.c_str(),
+				*password.c_str(), *db.c_str(),
+				*port, NULL, 0)) {
 		NORM_ERR("MySQL: %s",  mysql_error(conn));
 		mysql_close(conn);
 		mysql_library_end();

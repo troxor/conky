@@ -39,7 +39,6 @@ class imlib_cache_size_setting: public conky::range_config_setting<unsigned long
 	typedef conky::range_config_setting<unsigned long> Base;
 
 protected:
-	virtual void lua_setter(lua::state &l, bool init);
 	virtual void cleanup(lua::state &l);
 
 public:
@@ -47,6 +46,8 @@ public:
 		: Base("imlib_cache_size", 0,
 				std::numeric_limits<unsigned long>::max(), 4096*1024, true)
 	{}
+
+	virtual const unsigned long set(const unsigned long &r, bool init);
 };
 
 #endif /* _CONKY_IMBLI2_H_ */

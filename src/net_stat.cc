@@ -79,7 +79,7 @@ struct net_stat *get_net_stat(const char *dev, void *free_at_crash1, void *free_
 	/* wasn't found? add it */
 	for (i = 0; i < MAX_NET_INTERFACES; i++) {
 		if (netstats[i].dev == 0) {
-			netstats[i].dev = strndup(dev, text_buffer_size.get(*state));
+			netstats[i].dev = strndup(dev, *text_buffer_size);
 			return &netstats[i];
 		}
 	}
@@ -128,7 +128,7 @@ void parse_net_stat_bar_arg(struct text_object *obj, const char *arg, void *free
 		obj->data.opaque = get_net_stat(arg, obj, free_at_crash);
 	} else {
 		// default to DEFAULTNETDEV
-		char *buf = strndup(DEFAULTNETDEV, text_buffer_size.get(*state));
+		char *buf = strndup(DEFAULTNETDEV, *text_buffer_size);
 		obj->data.opaque = get_net_stat(buf, obj, free_at_crash);
 		free(buf);
 	}
@@ -436,7 +436,7 @@ void clear_net_stats(void)
 
 void parse_if_up_arg(struct text_object *obj, const char *arg)
 {
-	obj->data.opaque = strndup(arg, text_buffer_size.get(*state));
+	obj->data.opaque = strndup(arg, *text_buffer_size);
 }
 
 void free_if_up(struct text_object *obj)
@@ -468,12 +468,12 @@ int interface_up(struct text_object *obj)
 
 	if (!(ifr.ifr_flags & IFF_UP)) /* iface is not up */
 		goto END_FALSE;
-	if (if_up_strictness.get(*state) == IFUP_UP)
+	if (*if_up_strictness == IFUP_UP)
 		goto END_TRUE;
 
 	if (!(ifr.ifr_flags & IFF_RUNNING))
 		goto END_FALSE;
-	if (if_up_strictness.get(*state) == IFUP_LINK)
+	if (*if_up_strictness == IFUP_LINK)
 		goto END_TRUE;
 
 	if (ioctl(fd, SIOCGIFADDR, &ifr)) {
@@ -537,7 +537,7 @@ int update_dns_data(void)
 			line[strlen(line) - 1] = '\0';	// remove trailing newline
 			dns_data.nscount++;
 			dns_data.ns_list = (char**)realloc(dns_data.ns_list, dns_data.nscount * sizeof(char *));
-			dns_data.ns_list[dns_data.nscount - 1] = strndup(line + 11, text_buffer_size.get(*state));
+			dns_data.ns_list[dns_data.nscount - 1] = strndup(line + 11, *text_buffer_size);
 		}
 	}
 	fclose(fp);

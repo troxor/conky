@@ -113,8 +113,8 @@ const char *scan_gauge(struct text_object *obj, const char *args, double scale)
 	memset(g, 0, sizeof(struct gauge));
 
 	/*width and height*/
-	g->width = default_gauge_width.get(*state);
-	g->height = default_gauge_height.get(*state);
+	g->width = *default_gauge_width;
+	g->height = *default_gauge_height;
 
 	if (scale)
 		g->scale = scale;
@@ -146,8 +146,8 @@ const char *scan_bar(struct text_object *obj, const char *args, double scale)
 	memset(b, 0, sizeof(struct bar));
 
 	/* zero width means all space that is available */
-	b->width = default_bar_width.get(*state);
-	b->height = default_bar_height.get(*state);
+	b->width = *default_bar_width;
+	b->height = *default_bar_height;
 
 	if (scale)
 		b->scale = scale;
@@ -186,8 +186,8 @@ char *scan_graph(struct text_object *obj, const char *args, double defscale)
 	obj->special_data = g;
 
 	/* zero width means all space that is available */
-	g->width = default_graph_width.get(*state);
-	g->height = default_graph_height.get(*state);
+	g->width = *default_graph_width;
+	g->height = *default_graph_height;
 	g->first_colour = 0;
 	g->last_colour = 0;
 	g->scale = defscale;
@@ -207,11 +207,11 @@ char *scan_graph(struct text_object *obj, const char *args, double defscale)
 			return NULL;
 		}
 		if (sscanf(args, "%1023s %d,%d %x %x %lf", buf, &g->height, &g->width, &g->first_colour, &g->last_colour, &g->scale) == 6) {
-			return strndup(buf, text_buffer_size.get(*state));
+			return strndup(buf, *text_buffer_size);
 		}
 		g->scale = defscale;
 		if (sscanf(args, "%1023s %d,%d %x %x", buf, &g->height, &g->width, &g->first_colour, &g->last_colour) == 5) {
-			return strndup(buf, text_buffer_size.get(*state));
+			return strndup(buf, *text_buffer_size);
 		}
 		buf[0] = '\0';
 		g->height = 25;
@@ -224,11 +224,11 @@ char *scan_graph(struct text_object *obj, const char *args, double defscale)
 			return NULL;
 		}
 		if (sscanf(args, "%1023s %x %x %lf", buf, &g->first_colour, &g->last_colour, &g->scale) == 4) {
-			return strndup(buf, text_buffer_size.get(*state));
+			return strndup(buf, *text_buffer_size);
 		}
 		g->scale = defscale;
 		if (sscanf(args, "%1023s %x %x", buf, &g->first_colour, &g->last_colour) == 3) {
-			return strndup(buf, text_buffer_size.get(*state));
+			return strndup(buf, *text_buffer_size);
 		}
 		buf[0] = '\0';
 		g->first_colour = 0;
@@ -260,13 +260,13 @@ char *scan_graph(struct text_object *obj, const char *args, double defscale)
 
 #undef g
 
-		return strndup(buf, text_buffer_size.get(*state));
+		return strndup(buf, *text_buffer_size);
 	}
 
 	if (buf[0] == '\0') {
 		return NULL;
 	} else {
-		return strndup(buf, text_buffer_size.get(*state));
+		return strndup(buf, *text_buffer_size);
 	}
 }
 #endif /* BUILD_X11 */
@@ -316,7 +316,7 @@ void new_gauge_in_x11(struct text_object *obj, char *buf, double usage)
 	struct special_t *s = 0;
 	struct gauge *g = (struct gauge *)obj->special_data;
 
-	if (not out_to_x.get(*state))
+	if (not *out_to_x)
 		return;
 
 	if (!g)
@@ -344,7 +344,7 @@ void new_gauge(struct text_object *obj, char *p, int p_max_size, double usage)
 		usage = MIN(g->scale, usage);
 
 #ifdef BUILD_X11
-	if (out_to_x.get(*state))
+	if (*out_to_x)
 		new_gauge_in_x11(obj, p, usage);
 	else
 #endif /* BUILD_X11 */
@@ -357,7 +357,7 @@ void new_font(struct text_object *obj, char *p, int p_max_size)
 	struct special_t *s;
 	int tmp = selected_font;
 
-	if (not out_to_x.get(*state))
+	if (not *out_to_x)
 		return;
 
 	if (!p_max_size)
@@ -415,7 +415,7 @@ void new_graph(struct text_object *obj, char *buf, int buf_max_size, double val)
 	struct special_t *s = 0;
 	struct graph *g = (struct graph *)obj->special_data;
 
-	if (not out_to_x.get(*state))
+	if (not *out_to_x)
 		return;
 
 	if (!g || !buf_max_size)
@@ -467,7 +467,7 @@ void new_graph(struct text_object *obj, char *buf, int buf_max_size, double val)
 
 void new_hr(struct text_object *obj, char *p, int p_max_size)
 {
-	if (not out_to_x.get(*state))
+	if (not *out_to_x)
 		return;
 
 	if (!p_max_size)
@@ -483,7 +483,7 @@ void scan_stippled_hr(struct text_object *obj, const char *arg)
 	sh = (struct stippled_hr *)malloc(sizeof(struct stippled_hr));
 	memset(sh, 0, sizeof(struct stippled_hr));
 
-	sh->arg = stippled_borders.get(*state);
+	sh->arg = *stippled_borders;
 	sh->height = 1;
 
 	if (arg) {
@@ -502,7 +502,7 @@ void new_stippled_hr(struct text_object *obj, char *p, int p_max_size)
 	struct special_t *s = 0;
 	struct stippled_hr *sh = (struct stippled_hr *)obj->special_data;
 
-	if (not out_to_x.get(*state))
+	if (not *out_to_x)
 		return;
 
 	if (!sh || !p_max_size)
@@ -518,11 +518,11 @@ void new_stippled_hr(struct text_object *obj, char *p, int p_max_size)
 void new_fg(struct text_object *obj, char *p, int p_max_size)
 {
 #ifdef BUILD_X11
-	if (out_to_x.get(*state))
+	if (*out_to_x)
 		new_special(p, FG)->arg = obj->data.l;
 #endif /* BUILD_X11 */
 #ifdef BUILD_NCURSES
-	if (out_to_ncurses.get(*state))
+	if (*out_to_ncurses)
 		new_special(p, FG)->arg = obj->data.l;
 #endif /* BUILD_NCURSES */
 	UNUSED(obj);
@@ -533,7 +533,7 @@ void new_fg(struct text_object *obj, char *p, int p_max_size)
 #ifdef BUILD_X11
 void new_bg(struct text_object *obj, char *p, int p_max_size)
 {
-	if (not out_to_x.get(*state))
+	if (not *out_to_x)
 		return;
 
 	if (!p_max_size)
@@ -575,7 +575,7 @@ static void new_bar_in_x11(struct text_object *obj, char *buf, double usage)
 	struct special_t *s = 0;
 	struct bar *b = (struct bar *)obj->special_data;
 
-	if (not out_to_x.get(*state))
+	if (not *out_to_x)
 		return;
 
 	if (!b)
@@ -604,7 +604,7 @@ void new_bar(struct text_object *obj, char *p, int p_max_size, double usage)
 		usage = MIN(b->scale, usage);
 
 #ifdef BUILD_X11
-	if (out_to_x.get(*state))
+	if (*out_to_x)
 		new_bar_in_x11(obj, p, usage);
 	else
 #endif /* BUILD_X11 */

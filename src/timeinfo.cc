@@ -51,7 +51,7 @@ conky::simple_config_setting<bool> times_in_seconds("times_in_seconds", false, f
 
 void scan_time(struct text_object *obj, const char *arg)
 {
-	obj->data.opaque = strndup(arg ? arg : "%F %T", text_buffer_size.get(*state));
+	obj->data.opaque = strndup(arg ? arg : "%F %T", *text_buffer_size);
 }
 
 void scan_tztime(struct text_object *obj, const char *arg)
@@ -73,8 +73,8 @@ void scan_tztime(struct text_object *obj, const char *arg)
 
 	ts = (tztime_s*) malloc(sizeof(struct tztime_s));
 	memset(ts, 0, sizeof(struct tztime_s));
-	ts->fmt = strndup(fmt ? fmt : "%F %T", text_buffer_size.get(*state));
-	ts->tz = tz ? strndup(tz, text_buffer_size.get(*state)) : NULL;
+	ts->fmt = strndup(fmt ? fmt : "%F %T", *text_buffer_size);
+	ts->tz = tz ? strndup(tz, *text_buffer_size) : NULL;
 	obj->data.opaque = ts;
 }
 
@@ -165,7 +165,7 @@ static void do_format_time(struct text_object *obj, char *p, unsigned int p_max_
 	int minutes, hours, days, weeks;
 	char show_minutes = 0, show_hours = 0, show_days = 0, show_weeks = 0, hidestring;
 
-	if (not times_in_seconds.get(*state)) {
+	if (not *times_in_seconds) {
 		NORM_ERR("Enable \"times_in_seconds\" to use $format_time");
 		return;
 	}
@@ -311,9 +311,9 @@ static void do_format_time(struct text_object *obj, char *p, unsigned int p_max_
 
 void print_format_time(struct text_object *obj, char *p, int p_max_size)
 {
-	std::unique_ptr<char []> buf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> buf(new char[*max_user_text]);
 
-	generate_text_internal(buf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(buf.get(), *max_user_text, *obj->sub);
 	obj->data.s = buf.get();
 	do_format_time(obj, p, p_max_size);
 }

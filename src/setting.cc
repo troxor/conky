@@ -133,21 +133,18 @@ namespace conky {
 		/*
 		 * Performs the actual assignment of settings. Calls the setting-specific setter after
 		 * some sanity-checking.
-		 * stack on entry: | ..., new_config_table, key, value, old_value |
-		 * stack on exit:  | ..., new_config_table |
+		 * stack on entry: | ..., key, value |
+		 * stack on exit:  | ... |
 		 */
 		void config_setting_base::process_setting(lua::state &l, bool init)
 		{
-			lua::stack_sentry s(l, -3);
+			lua::stack_sentry s(l, -2);
 
-			config_setting_base *ptr = get_setting(l, -3);
+			config_setting_base *ptr = get_setting(l, -2);
 			if(not ptr)
 				return;
 
 			ptr->lua_setter(l, init);
-			l.pushvalue(-2);
-			l.insert(-2);
-			l.rawset(-4);
 		}
 
 		/*
@@ -158,22 +155,34 @@ namespace conky {
 		int config_setting_base::config__newindex(lua::state *l)
 		{
 			lua::stack_sentry s(*l, -3);
-			l->checkstack(1);
 
-			l->getmetatable(-3);
-			l->replace(-4);
-
-			l->pushvalue(-2);
-			l->rawget(-4);
 			process_setting(*l, false);
 
 			return 0;
 		}
 
 		/*
-		 * conky.config will not be a table, but a userdata with some metamethods we do this
-		 * because we want to control access to the settings we use the metatable for storing the
-		 * settings, that means having a setting whose name starts with "__" is a bad idea
+		 * Called when user tries to read the value of a setting
+		 * stack on entry: | config_table, key |
+		 * stack on exit:  | value |
+		 */
+		int config_setting_base::config__index(lua::state *l)
+		{
+			lua::stack_sentry s(*l, -2);
+
+			config_setting_base *ptr = get_setting(*l, -1);
+			l->pop(2);
+			if(not ptr) {
+				l->pushnil();
+				NORM_ERR("Attempting to access nonexisting setting.");
+			}
+			ptr->lua_getter(*l);
+			return 1;
+		}
+
+		/*
+		 * conky.config will not be a table, but a userdata with some metamethods. We do this
+		 * because we want to control access to the settings.
 		 * stack on entry: | ... |
 		 * stack on exit:  | ... new_config_table |
 		 */
@@ -218,16 +227,13 @@ namespace conky {
 				priv::config_setting_base::make_conky_config(l);
 				l.rawsetfield(-3, "config");
 
-				l.rawgetfield(-2, "config"); l.getmetatable(-1); l.replace(-2); {
-					const settings_vector &v = make_settings_vector();
+				const settings_vector &v = make_settings_vector();
 
-					for(size_t i = 0; i < v.size(); ++i) {
-						l.pushstring(v[i]->name);
-						l.rawgetfield(-3, v[i]->name.c_str());
-						l.pushnil();
-						priv::config_setting_base::process_setting(l, true);
-					}
-				} l.pop();
+				for(size_t i = 0; i < v.size(); ++i) {
+					l.pushstring(v[i]->name);
+					l.rawgetfield(-2, v[i]->name.c_str());
+					priv::config_setting_base::process_setting(l, true);
+				}
 
 				// print error messages for unknown settings
 				l.pushnil();
@@ -240,22 +246,11 @@ namespace conky {
 		} l.pop();
 	}
 
-	void cleanup_config_settings(lua::state &l)
+	void cleanup_config_settings(lua::state &)
 	{
-		lua::stack_sentry s(l);
-		l.checkstack(2);
-
-		l.getglobal("conky");
-		l.rawgetfield(-1, "config");
-		l.replace(-2);
-
 		const settings_vector &v = make_settings_vector();
-		for(size_t i = v.size(); i > 0; --i) {
-			l.getfield(-1, v[i-1]->name.c_str());
-			v[i-1]->cleanup(l);
-		}
-
-		l.pop();
+		for(size_t i = v.size(); i > 0; --i)
+			v[i-1]->cleanup();
 	}
 
 /////////// example settings, remove after real settings are available ///////

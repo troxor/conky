@@ -260,9 +260,9 @@ static struct {
 #define SAVE_SET_STRING(x, y) \
 	if (x && strcmp((char *)x, (char *)y)) { \
 		free(x); \
-		x = strndup("multiple", text_buffer_size.get(*state)); \
+		x = strndup("multiple", *text_buffer_size); \
 	} else if (!x) { \
-		x = strndup(y, text_buffer_size.get(*state)); \
+		x = strndup(y, *text_buffer_size); \
 	}
 
 void update_gateway_info_failure(const char *reason)
@@ -271,8 +271,8 @@ void update_gateway_info_failure(const char *reason)
 		perror(reason);
 	}
 	//2 pointers to 1 location causes a crash when we try to free them both
-	gw_info.iface = strndup("failed", text_buffer_size.get(*state));
-	gw_info.ip = strndup("failed", text_buffer_size.get(*state));
+	gw_info.iface = strndup("failed", *text_buffer_size);
+	gw_info.ip = strndup("failed", *text_buffer_size);
 }
 
 
@@ -483,7 +483,7 @@ int update_net_stats(void)
 		curtmp1 = 0;
 		curtmp2 = 0;
 		// get an average
-		int samples = net_avg_samples.get(*state);
+		int samples = *net_avg_samples;
 #ifdef HAVE_OPENMP
 #pragma omp parallel for reduction(+:curtmp1, curtmp2) schedule(dynamic,10)
 #endif /* HAVE_OPENMP */
@@ -868,7 +868,7 @@ int update_stat(void)
 				(float) (cpu[idx].cpu_total - cpu[idx].cpu_last_total);
 			curtmp = 0;
 
-			int samples = cpu_avg_samples.get(*state);
+			int samples = *cpu_avg_samples;
 #ifdef HAVE_OPENMP
 #pragma omp parallel for reduction(+:curtmp) schedule(dynamic,10)
 #endif /* HAVE_OPENMP */
@@ -2544,7 +2544,7 @@ static unsigned long long calc_cpu_total(void)
 inline static void calc_cpu_each(unsigned long long total)
 {
 	float mul = 100.0;
-	if(top_cpu_separate.get(*state))
+	if(*top_cpu_separate)
 		mul *= info.cpu_count;
 
 	for(struct process *p = first_process; p; p = p->next)
@@ -2661,7 +2661,7 @@ static void process_parse_stat(struct process *process)
 	}
 
 	free_and_zero(process->name);
-	process->name = strndup(procname, text_buffer_size.get(*::state));
+	process->name = strndup(procname, *text_buffer_size);
 	process->rss *= getpagesize();
 
 	process->total_cpu_time = process->user_time + process->kernel_time;

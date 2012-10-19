@@ -64,29 +64,27 @@ namespace {
 		typedef conky::simple_config_setting<std::string> Base;
 	
 	protected:
-		virtual void lua_setter(lua::state &l, bool init);
 		virtual void cleanup(lua::state &l);
 
 	public:
+		virtual const std::string set(const std::string &r, bool init);
 		nvidia_display_setting()
 			: Base("nvidia_display", std::string(), false)
 		{}
 	};
 
-	void nvidia_display_setting::lua_setter(lua::state &l, bool init)
+	const std::string nvidia_display_setting::set(const std::string &r, bool init)
 	{
-		lua::stack_sentry s(l, -2);
-
-		Base::lua_setter(l, init);
-
-		std::string str = do_convert(l, -1).first;
-		if(str.size()) {
-			if ((nvdisplay = XOpenDisplay(str.c_str())) == NULL) {
-				CRIT_ERR(NULL, NULL, "can't open nvidia display: %s", XDisplayName(str.c_str()));
+		if(init) {
+			value = r;
+			if(r.size()) {
+				if ((nvdisplay = XOpenDisplay(r.c_str())) == NULL) {
+					CRIT_ERR(NULL, NULL, "can't open nvidia display: %s",
+							XDisplayName(r.c_str()));
+				}
 			}
 		}	
-
-		++s;
+		return value;
 	}
 
 	void nvidia_display_setting::cleanup(lua::state &l)

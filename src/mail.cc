@@ -449,7 +449,7 @@ void parse_local_mail_args(struct text_object *obj, const char *arg)
 
 	if (!arg) {
 		n1 = 9.5;
-		strncpy(mbox, current_mail_spool.get(*state).c_str(), sizeof(mbox));
+		strncpy(mbox, current_mail_spool->c_str(), sizeof(mbox));
 	} else {
 		if (sscanf(arg, "%s %f", mbox, &n1) != 2) {
 			n1 = 9.5;
@@ -461,7 +461,7 @@ void parse_local_mail_args(struct text_object *obj, const char *arg)
 
 	locmail = (struct local_mail_s*)malloc(sizeof(struct local_mail_s));
 	memset(locmail, 0, sizeof(struct local_mail_s));
-	locmail->mbox = strndup(dst.c_str(), text_buffer_size.get(*state));
+	locmail->mbox = strndup(dst.c_str(), *text_buffer_size);
 	locmail->interval = n1;
 	obj->data.opaque = locmail;
 }
@@ -652,32 +652,23 @@ namespace {
 		mail_type type;
 
 	protected:
-		virtual void lua_setter(lua::state &l, bool init)
+		virtual void cleanup()
 		{
-			lua::stack_sentry s(l, -2);
-
-			Base::lua_setter(l, init);
-
-			if(init && !global_mail) {
-				const std::string &t = do_convert(l, -1).first;
-				if(t.size())
-					global_mail = parse_mail_args(type, t.c_str()).release();
-			}
-
-			++s;
-		}
-
-		virtual void cleanup(lua::state &l)
-		{
-			lua::stack_sentry s(l, -1);
-
 			delete global_mail;
 			global_mail = NULL;
-
-			l.pop();
 		}
 
 	public:
+		virtual const std::string set(const std::string &r, bool init)
+		{
+			if(init && !global_mail) {
+				if(r.size())
+					global_mail = parse_mail_args(type, r.c_str()).release();
+				return value = r;
+			}
+			return value;
+		}
+
 		mail_setting(const std::string &name, mail_type type_)
 			: Base(name), type(type_)
 		{}

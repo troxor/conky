@@ -51,10 +51,10 @@ static double celsius_to_fahrenheit(double n)
 
 static double convert_temp_output(double n, enum TEMP_UNIT input_unit)
 {
-	if (input_unit == output_unit.get(*state))
+	if (input_unit == *output_unit)
 		return n;
 
-	switch(output_unit.get(*state)) {
+	switch(*output_unit) {
 		case TEMP_CELSIUS:
 			return fahrenheit_to_celsius(n);
 		case TEMP_FAHRENHEIT:

@@ -35,19 +35,15 @@ int selected_font = 0;
 std::vector<font_list> fonts;
 char fontloaded = 0;
 
-void font_setting::lua_setter(lua::state &l, bool init)
+const std::string font_setting::set(const std::string &r, bool init)
 {
-	lua::stack_sentry s(l, -2);
+	if(fonts.size() == 0)
+		fonts.resize(1);
 
-	Base::lua_setter(l, init);
-
-	if(init && out_to_x.get(*state)) {
-		if(fonts.size() == 0)
-			fonts.resize(1);
-		fonts[0].name = do_convert(l, -1).first;
+	if(init && *out_to_x) {
+		return fonts[0].name = value = r;
 	}
-
-	++s;
+	return value;
 }
 
 font_setting font;
@@ -57,18 +53,16 @@ namespace {
 	class xftalpha_setting: public conky::simple_config_setting<float> {
 		typedef conky::simple_config_setting<float> Base;
 
-	protected:
-		virtual void lua_setter(lua::state &l, bool init)
+	public:
+		virtual float set(const float &r, bool init)
 		{
-			lua::stack_sentry s(l, -2);
-
-			Base::lua_setter(l, init);
-
-			if(init && out_to_x.get(*state)) {
-				fonts[0].font_alpha = do_convert(l, -1).first * 0xffff;
+			if(init) {
+				if(*out_to_x)
+					return fonts[0].font_alpha = value = r * 0xffff;
+				else
+					return value = std::numeric_limits<float>::quiet_NaN();
 			}
-
-			++s;
+			return value;
 		}
 
 	public:
@@ -84,7 +78,7 @@ namespace {
 void set_font(void)
 {
 #ifdef BUILD_XFT
-	if (use_xft.get(*state)) return;
+	if (*use_xft) return;
 #endif /* BUILD_XFT */
 	if (fonts[selected_font].font) {
 		XSetFont(display, window.gc, fonts[selected_font].font->fid);
@@ -93,11 +87,11 @@ void set_font(void)
 
 void setup_fonts(void)
 {
-	if (not out_to_x.get(*state)) {
+	if (not *out_to_x) {
 		return;
 	}
 #ifdef BUILD_XFT
-	if (use_xft.get(*state)) {
+	if (*use_xft) {
 		if (window.xftdraw) {
 			XftDrawDestroy(window.xftdraw);
 			window.xftdraw = 0;
@@ -111,7 +105,7 @@ void setup_fonts(void)
 
 int add_font(const char *data_in)
 {
-	if (not out_to_x.get(*state)) {
+	if (not *out_to_x) {
 		return 0;
 	}
 	fonts.push_back(font_list());
@@ -121,12 +115,12 @@ int add_font(const char *data_in)
 }
 
 void free_fonts(bool utf8) {
-	if (not out_to_x.get(*state)) {
+	if (not *out_to_x) {
 		return;
 	}
 	for (size_t i = 0; i < fonts.size(); i++) {
 #ifdef BUILD_XFT
-		if (use_xft.get(*state)) {
+		if (*use_xft) {
 			/*
 			 * Do we not need to close fonts with Xft? Unsure.  Not freeing the
 			 * fonts seems to incur a slight memory leak, but it also prevents
@@ -156,12 +150,12 @@ void free_fonts(bool utf8) {
 }
 
 void load_fonts(bool utf8) {
-	if (not out_to_x.get(*state))
+	if (not *out_to_x)
 		return;
 	for (size_t i = 0; i < fonts.size(); i++) {
 #ifdef BUILD_XFT
 		/* load Xft font */
-		if (use_xft.get(*state)) {
+		if (*use_xft) {
 			if(not fonts[i].xftfont)
 				fonts[i].xftfont = XftFontOpenName(display, screen, fonts[i].name.c_str());
 

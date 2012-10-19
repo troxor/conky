@@ -57,13 +57,13 @@ struct font_list {
 
 #ifdef BUILD_XFT
 
-#define font_height() (use_xft.get(*state) ? (fonts[selected_font].xftfont->ascent + \
+#define font_height() (*use_xft ? (fonts[selected_font].xftfont->ascent + \
 	fonts[selected_font].xftfont->descent) \
 	: (fonts[selected_font].font->max_bounds.ascent + \
 	fonts[selected_font].font->max_bounds.descent))
-#define font_ascent() (use_xft.get(*state) ? fonts[selected_font].xftfont->ascent \
+#define font_ascent() (*use_xft ? fonts[selected_font].xftfont->ascent \
 	: fonts[selected_font].font->max_bounds.ascent)
-#define font_descent() (use_xft.get(*state) ? fonts[selected_font].xftfont->descent \
+#define font_descent() (*use_xft ? fonts[selected_font].xftfont->descent \
 	: fonts[selected_font].font->max_bounds.descent)
 
 #else
@@ -88,13 +88,13 @@ void load_fonts(bool utf8);
 class font_setting: public conky::simple_config_setting<std::string> {
 	typedef conky::simple_config_setting<std::string> Base;
 
-protected:
-	virtual void lua_setter(lua::state &l, bool init);
-
 public:
 	font_setting()
 		: Base("font", "6x10", false)
 	{}
+
+	virtual const std::string set(const std::string &r, bool init);
+
 };
 
 extern font_setting font;

@@ -58,7 +58,7 @@ void clear_diskio_stats(void)
 struct diskio_stat *prepare_diskio_stat(const char *s)
 {
 	struct stat sb;
-	std::vector<char> stat_name(text_buffer_size.get(*state)), device_name(text_buffer_size.get(*state));
+	std::vector<char> stat_name(*text_buffer_size), device_name(*text_buffer_size);
 	struct diskio_stat *cur = &stats;
 
 	if (!s)
@@ -67,12 +67,12 @@ struct diskio_stat *prepare_diskio_stat(const char *s)
 #if defined(__FreeBSD__) || defined(__DragonFly__)
 	if (strncmp(s, "/dev/", 5) == 0) {
 		// supplied a /dev/device arg, so cut off the /dev part
-		strncpy(&(device_name[0]), s + 5, text_buffer_size.get(*state));
+		strncpy(&(device_name[0]), s + 5, *text_buffer_size);
 	} else
 #endif
-	strncpy(&(device_name[0]), s, text_buffer_size.get(*state));
+	strncpy(&(device_name[0]), s, *text_buffer_size);
 
-	snprintf(&(stat_name[0]), text_buffer_size.get(*state), "/dev/%s", &(device_name[0]));
+	snprintf(&(stat_name[0]), *text_buffer_size, "/dev/%s", &(device_name[0]));
 
 	if (stat(&(stat_name[0]), &sb)) {
 		NORM_ERR("diskio device '%s' does not exist", s);
@@ -89,7 +89,7 @@ struct diskio_stat *prepare_diskio_stat(const char *s)
 	/* no existing found, make a new one */
 	cur->next = new diskio_stat;
 	cur = cur->next;
-	cur->dev = strndup(&(device_name[0]), text_buffer_size.get(*state));
+	cur->dev = strndup(&(device_name[0]), *text_buffer_size);
 	cur->last = UINT_MAX;
 	cur->last_read = UINT_MAX;
 	cur->last_write = UINT_MAX;
@@ -194,7 +194,7 @@ void update_diskio_values(struct diskio_stat *ds,
 	ds->sample[0] = ds->sample_read[0] + ds->sample_write[0];
 
 	/* compute averages */
-	int samples = diskio_avg_samples.get(*state);
+	int samples = *diskio_avg_samples;
 	for (i = 0; i < samples; i++) {
 		sum += ds->sample[i];
 		sum_r += ds->sample_read[i];

@@ -102,7 +102,7 @@ int tcp_portmon_init(struct text_object *obj, const char *arg)
 	if (find_tcp_port_monitor(pmc, port_begin, port_end) == NULL) {
 		tcp_port_monitor_args_t pma;
 		memset(&pma, 0, sizeof pma);
-		pma.max_port_monitor_connections = max_port_monitor_connections.get(*state);
+		pma.max_port_monitor_connections = *max_port_monitor_connections;
 
 		/* add the newly created monitor to the collection */
 		if (insert_new_tcp_port_monitor_into_collection(pmc, port_begin, port_end, &pma) != 0) {

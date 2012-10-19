@@ -172,7 +172,7 @@ void scan_exec_arg(struct text_object *obj, const char *arg)
 {
 	/* XXX: do real bar parsing here */
 	scan_bar(obj, "", 100);
-	obj->data.s = strndup(arg ? arg : "", text_buffer_size.get(*state));
+	obj->data.s = strndup(arg ? arg : "", *text_buffer_size);
 }
 
 void scan_execi_arg(struct text_object *obj, const char *arg)
@@ -187,7 +187,7 @@ void scan_execi_arg(struct text_object *obj, const char *arg)
 		delete ed;
 		return;
 	}
-	ed->cmd = strndup(arg + n, text_buffer_size.get(*state));
+	ed->cmd = strndup(arg + n, *text_buffer_size);
 	obj->data.opaque = ed;
 }
 

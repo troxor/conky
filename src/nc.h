@@ -20,10 +20,10 @@ namespace priv {
 		typedef conky::simple_config_setting<bool> Base;
 	
 	protected:
-		virtual void lua_setter(lua::state &l, bool init);
 		virtual void cleanup(lua::state &l);
 
 	public:
+		const bool set(const bool &r, bool init);
 		out_to_ncurses_setting()
 			: Base("out_to_ncurses", false, false)
 		{}

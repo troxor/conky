@@ -151,7 +151,7 @@ static char *handle_template(const char *tmpl, const char *args)
 		}
 	}
 
-	eval_text = backslash_escape(_template[template_idx].get(*state).c_str(), argsp, argcnt);
+	eval_text = backslash_escape(_template[template_idx]->c_str(), argsp, argcnt);
 	DBGP("substituted %s, output is '%s'", tmpl, eval_text);
 	free(args_dup);
 	for (i = 0; i < argcnt; i++)

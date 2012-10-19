@@ -71,65 +71,50 @@ static Window find_desktop_window(Window *p_root, Window *p_desktop);
 static Window find_subwindow(Window win, int w, int h);
 static void init_X11();
 static void deinit_X11();
-static void init_window(lua::state &l, bool own);
+static void init_window(bool own);
 
 /********************* <SETTINGS> ************************/
 namespace priv {
-	void out_to_x_setting::lua_setter(lua::state &l, bool init)
+	const bool out_to_x_setting::set(const bool &r, bool init)
 	{
-		lua::stack_sentry s(l, -2);
-
-		Base::lua_setter(l, init);
-
-		if(init && do_convert(l, -1).first)
-			init_X11();
-
-		++s;
-	}
-
-	void out_to_x_setting::cleanup(lua::state &l)
-	{
-		lua::stack_sentry s(l, -1);
-
-		if(do_convert(l, -1).first)
-			deinit_X11();
-
-		l.pop();
-	}
-
-	void own_window_setting::lua_setter(lua::state &l, bool init)
-	{
-		lua::stack_sentry s(l, -2);
-
-		Base::lua_setter(l, init);
-
 		if(init) {
-			if(do_convert(l, -1).first) {
+			if(r)
+				init_X11();
+			value = r;
+		}
+		return value;
+	}
+
+	void out_to_x_setting::cleanup()
+	{
+		if(value)
+			deinit_X11();
+	}
+
+	const bool own_window_setting::set(const bool &r, bool init)
+	{
+		if(init) {
+			if(r) {
 #ifndef OWN_WINDOW
 				std::cerr << "Support for the own_window setting has been "
 							 "disabled during compilation\n";
-				l.pop();
-				l.pushboolean(false);
 #endif
 			}
 
-			if(out_to_x.get(l))
-				init_window(l, do_convert(l, -1).first);
-			else {
-				// own_window makes no sense when not drawing to X
-				l.pop();
-				l.pushboolean(false);
-			} 
+			if(*out_to_x) {
+				init_window(r);
+				value = r;
+			} else
+				value = false;
 		}
-
-		++s;
+		return value;
 	}
 
 #ifdef BUILD_XDBE
-	bool use_xdbe_setting::set_up(lua::state &l)
+	bool use_xdbe_setting::set_up()
 	{
 		// double_buffer makes no sense when not drawing to X
-		if(not out_to_x.get(l))
+		if(not *out_to_x)
 			return false;
 
 		int major, minor;
@@ -152,32 +137,27 @@ namespace priv {
 		return true;
 	}
 
-	void use_xdbe_setting::lua_setter(lua::state &l, bool init)
+	const bool use_xdbe_setting::set(const bool &r, bool init)
 	{
-		lua::stack_sentry s(l, -2);
-
-		Base::lua_setter(l, init);
-
-		if(init && do_convert(l, -1).first) {
-			if(not set_up(l)) {
-				l.pop();
-				l.pushboolean(false);
-			}
+		if(init) {
+			if(r && set_up())
+				value = true;
+			else
+				value = false;
 
 			fprintf(stderr, PACKAGE_NAME": drawing to %s buffer\n",
-					do_convert(l, -1).first?"double":"single");
+					value?"double":"single");
 		}
-
-		++s;
+		return value;
 	}
 
 
 
 #else
-	bool use_xpmdb_setting::set_up(lua::state &l)
+	bool use_xpmdb_setting::set_up()
 	{
 		// double_buffer makes no sense when not drawing to X
-		if(not out_to_x.get(l))
+		if(not *out_to_x)
 			return false;
 
 		window.back_buffer = XCreatePixmap(display,
@@ -194,38 +174,25 @@ namespace priv {
 		return true;
 	}
 
-	void use_xpmdb_setting::lua_setter(lua::state &l, bool init)
+	const bool use_xpmdb_setting::set(const bool &r, bool init)
 	{
-		lua::stack_sentry s(l, -2);
-
-		Base::lua_setter(l, init);
-
-		if(init && do_convert(l, -1).first) {
-			if(not set_up(l)) {
-				l.pop();
-				l.pushboolean(false);
-			}
+		if(init) {
+			if(r && set_up())
+				value = true;
+			else
+				value = false;
 
 			fprintf(stderr, PACKAGE_NAME": drawing to %s buffer\n",
-					do_convert(l, -1).first?"double":"single");
+					value?"double":"single");
 		}
+		return value;
+	}
 
-		++s;
+	unsigned long colour_traits::from_lua(lua::state &l, int index, const std::string &)
+	{
+		return *out_to_x ? get_x11_color(l.tostring(index)) : 0;
 	}
 #endif
-
-	void colour_setting::lua_setter(lua::state &l, bool init)
-	{
-		lua::stack_sentry s(l, -2);
-
-		if(not out_to_x.get(l)) {
-			// ignore if we're not using X
-			l.replace(-2);
-		} else
-			Base::lua_setter(l, init);
-
-		++s;
-	}
 }
 
 template<>
@@ -399,7 +366,7 @@ static int __attribute__((noreturn)) x11_ioerror_handler(Display *d)
 static void init_X11()
 {
 	if (!display) {
-		const std::string &dispstr = display_name.get(*state).c_str();
+		const std::string &dispstr = display_name->c_str();
 		// passing NULL to XOpenDisplay should open the default display
 		const char *disp = dispstr.size() ? dispstr.c_str() : NULL;
 		if ((display = XOpenDisplay(disp)) == NULL) {
@@ -523,7 +490,7 @@ namespace {
 	/* helper function for set_transparent_background() */
 	void do_set_background(Window win, int argb)
 	{
-		unsigned long colour = background_colour.get(*state) | (argb<<24);
+		unsigned long colour = *background_colour | (argb<<24);
 		XSetWindowBackground(display, win, colour);
 	}
 }
@@ -535,12 +502,12 @@ void set_transparent_background(Window win)
 #ifdef BUILD_ARGB
 	if (have_argb_visual) {
 		// real transparency
-		do_set_background(win, set_transparent.get(*state) ? 0 : own_window_argb_value.get(*state));
+		do_set_background(win, *set_transparent ? 0 : *own_window_argb_value);
 	} else {
 #endif /* BUILD_ARGB */
 	// pseudo transparency
 	
-	if (set_transparent.get(*state)) {
+	if (*set_transparent) {
 		Window parent = win;
 		unsigned int i;
 
@@ -603,7 +570,7 @@ void destroy_window(void)
 	memset(&window, 0, sizeof(struct conky_window));
 }
 
-static void init_window(lua::state &l __attribute__((unused)), bool own)
+static void init_window(bool own)
 {
 	// own is unused if OWN_WINDOW is not defined
 	(void) own;
@@ -620,7 +587,7 @@ static void init_window(lua::state &l __attribute__((unused)), bool own)
 		}
 		
 #ifdef BUILD_ARGB
-		if (use_argb_visual.get(l) && get_argb_visual(&visual, &depth)) {
+		if (*use_argb_visual && get_argb_visual(&visual, &depth)) {
 			have_argb_visual = true;
 			window.visual = visual;
 			window.colourmap = XCreateColormap(display,
@@ -635,10 +602,10 @@ static void init_window(lua::state &l __attribute__((unused)), bool own)
 		}
 #endif /* BUILD_ARGB */
 
-		int b = border_inner_margin.get(l) + border_width.get(l)
-			+ border_outer_margin.get(l);
+		int b = *border_inner_margin + *border_width
+			+ *border_outer_margin;
 
-		if (own_window_type.get(l) == TYPE_OVERRIDE) {
+		if (*own_window_type == TYPE_OVERRIDE) {
 
 			/* An override_redirect True window.
 			 * No WM hints or button processing needed. */
@@ -665,7 +632,7 @@ static void init_window(lua::state &l __attribute__((unused)), bool own)
 
 			fprintf(stderr, PACKAGE_NAME": window type - override\n");
 			fflush(stderr);
-		} else { /* own_window_type.get(l) != TYPE_OVERRIDE */
+		} else { /* *own_window_type != TYPE_OVERRIDE */
 
 			/* A window managed by the window manager.
 			 * Process hints and buttons. */
@@ -688,7 +655,7 @@ static void init_window(lua::state &l __attribute__((unused)), bool own)
 			}
 #endif /* BUILD_ARGB */
 
-			if (own_window_type.get(l) == TYPE_DOCK) {
+			if (*own_window_type == TYPE_DOCK) {
 				window.x = window.y = 0;
 			}
 			/* Parent is root window so WM can take control */
@@ -701,18 +668,18 @@ static void init_window(lua::state &l __attribute__((unused)), bool own)
 			// res_name is not declared as const char *. XmbSetWMProperties hopefully doesn't
 			// modify the value (hell, even their own example app assigns a literal string
 			// constant to the field)
-			const std::string &class_name = own_window_class.get(l);
+			const std::string &class_name = *own_window_class;
 
 			classHint.res_name = const_cast<char *>(class_name.c_str());
 			classHint.res_class = classHint.res_name;
 
-			uint16_t hints = own_window_hints.get(l);
+			uint16_t hints = *own_window_hints;
 
 			wmHint.flags = InputHint | StateHint;
 			/* allow decorated windows to be given input focus by WM */
 			wmHint.input =
 				TEST_HINT(hints, HINT_UNDECORATED) ? False : True;
-			if (own_window_type.get(l) == TYPE_DOCK || own_window_type.get(l) == TYPE_PANEL) {
+			if (*own_window_type == TYPE_DOCK || *own_window_type == TYPE_PANEL) {
 				wmHint.initial_state = WithdrawnState;
 			} else {
 				wmHint.initial_state = NormalState;
@@ -720,7 +687,7 @@ static void init_window(lua::state &l __attribute__((unused)), bool own)
 
 			XmbSetWMProperties(display, window.window, NULL, NULL, argv_copy,
 					argc_copy, NULL, &wmHint, &classHint);
-			XStoreName(display, window.window, own_window_title.get(l).c_str() );
+			XStoreName(display, window.window, *own_window_title.c_str() );
 
 			/* Sets an empty WM_PROTOCOLS property */
 			XSetWMProtocols(display, window.window, NULL, 0);
@@ -729,7 +696,7 @@ static void init_window(lua::state &l __attribute__((unused)), bool own)
 			if ((xa = ATOM(_NET_WM_WINDOW_TYPE)) != None) {
 				Atom prop;
 
-				switch (own_window_type.get(l)) {
+				switch (*own_window_type) {
 					case TYPE_DESKTOP:
 						prop = ATOM(_NET_WM_WINDOW_TYPE_DESKTOP);
 						fprintf(stderr, PACKAGE_NAME": window type - desktop\n");
@@ -898,7 +865,7 @@ static void init_window(lua::state &l __attribute__((unused)), bool own)
 
 	XSelectInput(display, window.window, ExposureMask | PropertyChangeMask
 #ifdef OWN_WINDOW
-			| (own_window.get(l) ? (StructureNotifyMask |
+			| (*own_window ? (StructureNotifyMask |
 					ButtonPressMask | ButtonReleaseMask) : 0)
 #endif
 			);
@@ -1089,7 +1056,7 @@ void print_monitor(struct text_object *obj, char *p, int p_max_size)
 {
 	(void)obj;
 
-	if(not out_to_x.get(*state)) {
+	if(not *out_to_x) {
 		strncpy(p, NOT_IN_X, p_max_size);
 		return;
 	}
@@ -1100,7 +1067,7 @@ void print_monitor_number(struct text_object *obj, char *p, int p_max_size)
 {
 	(void)obj;
 
-	if(not out_to_x.get(*state)) {
+	if(not *out_to_x) {
 		strncpy(p, NOT_IN_X, p_max_size);
 		return;
 	}
@@ -1111,7 +1078,7 @@ void print_desktop(struct text_object *obj, char *p, int p_max_size)
 {
 	(void)obj;
 
-	if(not out_to_x.get(*state)) {
+	if(not *out_to_x) {
 		strncpy(p, NOT_IN_X, p_max_size);
 		return;
 	}
@@ -1122,7 +1089,7 @@ void print_desktop_number(struct text_object *obj, char *p, int p_max_size)
 {
 	(void)obj;
 
-	if(not out_to_x.get(*state)) {
+	if(not *out_to_x) {
 		strncpy(p, NOT_IN_X, p_max_size);
 		return;
 	}
@@ -1133,7 +1100,7 @@ void print_desktop_name(struct text_object *obj, char *p, int p_max_size)
 {
 	(void)obj;
 
-	if(not out_to_x.get(*state)) {
+	if(not *out_to_x) {
 		strncpy(p, NOT_IN_X, p_max_size);
 	} else {
 		strncpy(p, info.x11.desktop.name.c_str(), p_max_size);
@@ -1210,7 +1177,7 @@ void set_struts(int sidenum)
 #ifdef BUILD_XDBE
 void xdbe_swap_buffers(void)
 {
-	if (use_xdbe.get(*state)) {
+	if (*use_xdbe) {
 		XdbeSwapInfo swap;
 
 		swap.swap_window = window.window;
@@ -1221,7 +1188,7 @@ void xdbe_swap_buffers(void)
 #else
 void xpmdb_swap_buffers(void)
 {
-	if (use_xpmdb.get(*state)) {
+	if (*use_xpmdb) {
 		XCopyArea(display, window.back_buffer, window.window, window.gc, 0, 0, window.width, window.height, 0, 0);
 		XSetForeground(display, window.gc, 0);
 		XFillRectangle(display, window.drawable, window.gc, 0, 0, window.width, window.height);

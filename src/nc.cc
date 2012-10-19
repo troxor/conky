@@ -7,18 +7,16 @@
 #include "nc.h"
 
 namespace priv {
-    void out_to_ncurses_setting::lua_setter(lua::state &l, bool init)
+	const bool out_to_ncurses::set(const bool &r, bool init)
     {
-        lua::stack_sentry s(l, -2);
-
-        Base::lua_setter(l, init);
-
-        if(init && do_convert(l, -1).first) {
-            initscr();
-            start_color();
+        if(init) {
+			value = r;
+			if(r) {
+				initscr();
+				start_color();
+			}
         }
-
-        ++s;
+		return value;
     }
 
 	void out_to_ncurses_setting::cleanup(lua::state &l)

@@ -445,30 +445,30 @@ static char *format_time(unsigned long timeval, const int width)
 	nt /= 60;			// total minutes
 	if (width >= snprintf(buf, sizeof buf, "%lu:%02u.%02u",
 				nt, nn, cc)) {
-		return strndup(buf, text_buffer_size.get(*state));
+		return strndup(buf, *text_buffer_size);
 	}
 	if (width >= snprintf(buf, sizeof buf, "%lu:%02u", nt, nn)) {
-		return strndup(buf, text_buffer_size.get(*state));
+		return strndup(buf, *text_buffer_size);
 	}
 	nn = nt % 60;		// minutes past the hour
 	nt /= 60;			// total hours
 	if (width >= snprintf(buf, sizeof buf, "%lu,%02u", nt, nn)) {
-		return strndup(buf, text_buffer_size.get(*state));
+		return strndup(buf, *text_buffer_size);
 	}
 	nn = nt;			// now also hours
 	if (width >= snprintf(buf, sizeof buf, "%uh", nn)) {
-		return strndup(buf, text_buffer_size.get(*state));
+		return strndup(buf, *text_buffer_size);
 	}
 	nn /= 24;			// now days
 	if (width >= snprintf(buf, sizeof buf, "%ud", nn)) {
-		return strndup(buf, text_buffer_size.get(*state));
+		return strndup(buf, *text_buffer_size);
 	}
 	nn /= 7;			// now weeks
 	if (width >= snprintf(buf, sizeof buf, "%uw", nn)) {
-		return strndup(buf, text_buffer_size.get(*state));
+		return strndup(buf, *text_buffer_size);
 	}
 	// well shoot, this outta' fit...
-	return strndup("<inf>", text_buffer_size.get(*state));
+	return strndup("<inf>", *text_buffer_size);
 }
 
 struct top_data {
@@ -489,7 +489,7 @@ static void print_top_name(struct text_object *obj, char *p, int p_max_size)
 	if (!td || !td->list || !td->list[td->num])
 		return;
 
-	width = MIN(p_max_size, (int)top_name_width.get(*state) + 1);
+	width = MIN(p_max_size, (int)*top_name_width + 1);
 	snprintf(p, width + 1, "%-*s", width, td->list[td->num]->name);
 }
 
@@ -607,7 +607,7 @@ int parse_top_args(const char *s, const char *arg, struct text_object *obj)
 		return 0;
 	}
 
-	td->s = strndup(arg, text_buffer_size.get(*state));
+	td->s = strndup(arg, *text_buffer_size);
 
 	if (sscanf(arg, "%63s %i", buf, &n) == 2) {
 		if (strcmp(buf, "name") == EQUAL) {

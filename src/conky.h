@@ -223,10 +223,8 @@ struct information {
 class music_player_interval_setting: public conky::simple_config_setting<double> {
 	typedef conky::simple_config_setting<double> Base;
 
-protected:
-	virtual void lua_setter(lua::state &l, bool init);
-
 public:
+	virtual const double set_default(bool init);
 	music_player_interval_setting()
 		: Base("music_player_interval", 0, true)
 	{}

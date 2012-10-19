@@ -65,17 +65,13 @@ namespace {
 	unsigned int cimlib_cache_flush_last = 0;
 }
 
-void imlib_cache_size_setting::lua_setter(lua::state &l, bool init)
+const unsigned long imlib_cache_size_setting::set(const unsigned long &r, bool init)
 {
-	lua::stack_sentry s(l, -2);
-
-	Base::lua_setter(l, init);
-	
-	if(init && out_to_x.get(l)) {
+	if(init && *out_to_x) {
 		image_list_start = image_list_end = NULL;
 		context = imlib_context_new();
 		imlib_context_push(context);
-		imlib_set_cache_size(do_convert(l, -1).first);	
+		imlib_set_cache_size(r);
 		/* set the maximum number of colors to allocate for 8bpp and less to 256 */
 		imlib_set_color_usage(256);
 		/* dither for depths < 24bpp */
@@ -85,9 +81,9 @@ void imlib_cache_size_setting::lua_setter(lua::state &l, bool init)
 		imlib_context_set_visual(window.visual);
 		imlib_context_set_colormap(window.colourmap);
 		imlib_context_set_drawable(window.drawable);
+		return value = r;
 	}
-	
-	++s;
+	return value;
 }
 
 void imlib_cache_size_setting::cleanup(lua::state &l)
@@ -239,8 +235,8 @@ void cimlib_render(int x, int y, int width, int height)
 
 	/* cheque if it's time to flush our cache */
 	now = time(NULL);
-	if (imlib_cache_flush_interval.get(*state) &&
-			now - imlib_cache_flush_interval.get(*state) > cimlib_cache_flush_last) {
+	if (*imlib_cache_flush_interval &&
+			now - *imlib_cache_flush_interval > cimlib_cache_flush_last) {
 		int size = imlib_get_cache_size();
 		imlib_set_cache_size(0);
 		imlib_set_cache_size(size);

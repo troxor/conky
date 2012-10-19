@@ -114,9 +114,9 @@ int inlist(struct ll_string* front, char* string) {
 
 void print_pid_chroot(struct text_object *obj, char *p, int p_max_size) {
 	char pathbuf[64];
-	std::unique_ptr<char []> buf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> buf(new char[*max_user_text]);
 
-	generate_text_internal(buf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(buf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/root", strtopid(buf.get()));
 	pid_readlink(pathbuf, p, p_max_size);
 }
@@ -126,9 +126,9 @@ void print_pid_cmdline(struct text_object *obj, char *p, int p_max_size)
 	char* buf;
 	int i, bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	if(*(objbuf.get()) != 0) {
 		snprintf(pathbuf, 64, PROCDIR "/%d/cmdline", strtopid(objbuf.get()));
@@ -152,9 +152,9 @@ void print_pid_cwd(struct text_object *obj, char *p, int p_max_size)
 	std::unique_ptr<char []> buf(new char[p_max_size]);
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/cwd", strtopid(objbuf.get()));
 	bytes_read = readlink(pathbuf, buf.get(), p_max_size);
 	if(bytes_read != -1) {
@@ -170,10 +170,10 @@ void print_pid_environ(struct text_object *obj, char *p, int p_max_size)
 	int i, total_read;
 	pid_t pid;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 	char *buf, *var=strdup(obj->data.s);;
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	if(sscanf(objbuf.get(), "%d %s", &pid, var) == 2) {
 		for(i = 0; var[i] != 0; i++) {
 			var[i] = toupper(var[i]);
@@ -203,9 +203,9 @@ void print_pid_environ_list(struct text_object *obj, char *p, int p_max_size)
 	int bytes_read, total_read;
 	int i = 0;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/environ", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &total_read, 1);
@@ -225,9 +225,9 @@ void print_pid_environ_list(struct text_object *obj, char *p, int p_max_size)
 
 void print_pid_exe(struct text_object *obj, char *p, int p_max_size) {
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/exe", strtopid(objbuf.get()));
 	pid_readlink(pathbuf, p, p_max_size);
 }
@@ -237,9 +237,9 @@ void print_pid_nice(struct text_object *obj, char *p, int p_max_size) {
 	int bytes_read;
 	long int nice_value;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	if(*(obj->data.s) != 0) {
 		snprintf(pathbuf, 64, PROCDIR "/%d/stat", strtopid(objbuf.get()));
@@ -261,9 +261,9 @@ void print_pid_openfiles(struct text_object *obj, char *p, int p_max_size) {
 	int length, totallength = 0;
 	struct ll_string* files_front = NULL;
 	struct ll_string* files_back = NULL;
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	dir = opendir(objbuf.get());
 	if(dir != NULL) {
@@ -296,9 +296,9 @@ void print_pid_parent(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -323,9 +323,9 @@ void print_pid_priority(struct text_object *obj, char *p, int p_max_size) {
 	int bytes_read;
 	long int priority;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	if(*(objbuf.get()) != 0) {
 		snprintf(pathbuf, 64, PROCDIR "/%d/stat", strtopid(objbuf.get()));
@@ -346,9 +346,9 @@ void print_pid_state(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -372,9 +372,9 @@ void print_pid_state_short(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
@@ -392,19 +392,19 @@ void print_pid_state_short(struct text_object *obj, char *p, int p_max_size) {
 
 void print_pid_stderr(struct text_object *obj, char *p, int p_max_size) {
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	snprintf(pathbuf, 64, PROCDIR "/%d/fd/2", strtopid(objbuf.get()));
 	pid_readlink(pathbuf, p, p_max_size);
 }
 
 void print_pid_stdin(struct text_object *obj, char *p, int p_max_size) {
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 	char pathbuf[64];
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	snprintf(pathbuf, 64, PROCDIR "/%d/fd/0", strtopid(objbuf.get()));
 	pid_readlink(pathbuf, p, p_max_size);
@@ -412,9 +412,9 @@ void print_pid_stdin(struct text_object *obj, char *p, int p_max_size) {
 
 void print_pid_stdout(struct text_object *obj, char *p, int p_max_size) {
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	snprintf(pathbuf, 64, PROCDIR "/%d/fd/1", strtopid(objbuf.get()));
 	pid_readlink(pathbuf, p, p_max_size);
@@ -422,10 +422,10 @@ void print_pid_stdout(struct text_object *obj, char *p, int p_max_size) {
 
 void scan_cmdline_to_pid_arg(struct text_object *obj, const char *arg, void* free_at_crash) {
 	unsigned int i;
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
 	/* FIXME */
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	if(strlen(arg) > 0) {
 		obj->data.s = strdup(arg);
@@ -480,9 +480,9 @@ void print_pid_threads(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -507,9 +507,9 @@ void print_pid_thread_list(struct text_object *obj, char *p, int p_max_size) {
 	struct dirent *entry;
 	int totallength = 0;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/task", strtopid(objbuf.get()));
 
 	dir = opendir(pathbuf);
@@ -532,9 +532,9 @@ void print_pid_time_kernelmode(struct text_object *obj, char *p, int p_max_size)
 	int bytes_read;
 	unsigned long int umtime;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	if(*(objbuf.get()) != 0) {
 		snprintf(pathbuf, 64, PROCDIR "/%d/stat", strtopid(objbuf.get()));
@@ -554,9 +554,9 @@ void print_pid_time_usermode(struct text_object *obj, char *p, int p_max_size) {
 	int bytes_read;
 	unsigned long int kmtime;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	if(*(objbuf.get()) != 0) {
 		snprintf(pathbuf, 64, PROCDIR "/%d/stat", strtopid(objbuf.get()));
@@ -576,9 +576,9 @@ void print_pid_time(struct text_object *obj, char *p, int p_max_size) {
 	int bytes_read;
 	unsigned long int umtime, kmtime;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 
 	if(*(objbuf.get()) != 0) {
 		snprintf(pathbuf, 64, PROCDIR "/%d/stat", strtopid(objbuf.get()));
@@ -599,9 +599,9 @@ void print_pid_uid(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -626,9 +626,9 @@ void print_pid_euid(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -654,9 +654,9 @@ void print_pid_suid(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -683,9 +683,9 @@ void print_pid_fsuid(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -714,9 +714,9 @@ void print_pid_gid(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -741,9 +741,9 @@ void print_pid_egid(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -769,9 +769,9 @@ void print_pid_sgid(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -798,9 +798,9 @@ void print_pid_fsgid(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -827,9 +827,9 @@ void internal_print_pid_vm(struct text_object *obj, char *p, int p_max_size, con
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/status", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -898,9 +898,9 @@ void print_pid_read(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/io", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);
@@ -925,9 +925,9 @@ void print_pid_write(struct text_object *obj, char *p, int p_max_size) {
 	char *begin, *end, *buf = NULL;
 	int bytes_read;
 	char pathbuf[64];
-	std::unique_ptr<char []> objbuf(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> objbuf(new char[*max_user_text]);
 
-	generate_text_internal(objbuf.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(objbuf.get(), *max_user_text, *obj->sub);
 	snprintf(pathbuf, 64, PROCDIR "/%d/io", strtopid(objbuf.get()));
 
 	buf = readfile(pathbuf, &bytes_read, 1);

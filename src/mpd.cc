@@ -44,75 +44,60 @@ namespace {
 	class mpd_host_setting: public conky::simple_config_setting<std::string> {
 		typedef conky::simple_config_setting<std::string> Base;
 	
-	protected:
-		virtual void lua_setter(lua::state &l, bool init);
-
 	public:
+		virtual const std::string set_default(bool init);
+
 		mpd_host_setting()
 			: Base("mpd_host", "localhost", false)
 		{}
 	};
 
-	void mpd_host_setting::lua_setter(lua::state &l, bool init)
+	const std::string mpd_host_setting::set_default(bool init);
 	{
-		lua::stack_sentry s(l, -2);
-
-		if(l.isnil(-2)) {
+		if(init) {
 			// get the value from environment
 			mpd_environment_host = true;
 			const char *t = getenv("MPD_HOST");
 			if(t) {
-				l.checkstack(1);
 				const char *h = strchr(t, '@');
 				if(h) {
-					if(h[1])
-						l.pushstring(h+1);
+					return value = h[1];
 				} else
-					l.pushstring(t);
-				l.replace(-3);
+					return value = h;
 			}
-
+			value.clear();
 		}
 
-		Base::lua_setter(l, init);
-
-		++s;
+		return value;
 	}
 
 	class mpd_password_setting: public conky::simple_config_setting<std::string> {
 		typedef conky::simple_config_setting<std::string> Base;
 	
-	protected:
-		virtual void lua_setter(lua::state &l, bool init);
-
 	public:
+		virtual const std::string set_default(bool init);
+
 		mpd_password_setting()
 			: Base("mpd_password", std::string(), false)
 		{}
 	};
 
-	void mpd_password_setting::lua_setter(lua::state &l, bool init)
+	const std::string mpd_password_setting::set_default(bool init)
 	{
-		lua::stack_sentry s(l, -2);
-
 		/* for security, dont use environment password when user specifies host in config */
-		if(l.isnil(-2) && mpd_environment_host) {
-			// get the value from environment
-			const char *t = getenv("MPD_HOST");
-			if(t) {
-				const char *p = strchr(t, '@');
-				if(p) {
-					l.checkstack(1);
-					l.pushstring(t, p-t);
-					l.replace(-3);
+		if(init) {
+			if(mpd_environment_host) {
+				// get the value from environment
+				const char *t = getenv("MPD_HOST");
+				if(t) {
+					const char *p = strchr(t, '@');
+					if(p)
+						return value.assign(t, p-t);
 				}
 			}
-
+			value.clear();
 		}
-
-		Base::lua_setter(l, init);
-
-		++s;
+		return value;
 	}
 
 	conky::range_config_setting<in_port_t> mpd_port("mpd_port", 1, 65535, 6600, false);
@@ -166,10 +151,10 @@ namespace {
 		
 		do {
 			if (!conn)
-				conn = mpd_newConnection(mpd_host.get(*state).c_str(), mpd_port.get(*state), 10);
+				conn = mpd_newConnection(*mpd_host.c_str(), *mpd_port, 10);
 
-			if (mpd_password.get(*state).size()) {
-				mpd_sendPasswordCommand(conn, mpd_password.get(*state).c_str());
+			if (*mpd_password.size()) {
+				mpd_sendPasswordCommand(conn, *mpd_password.c_str());
 				mpd_finishCommand(conn);
 			}
 
@@ -303,7 +288,7 @@ if (b) a=b; else a="";
 	mpd_result get_mpd()
 	{
 		uint32_t period = std::max(
-					lround(music_player_interval.get(*state)/active_update_interval()), 1l
+					lround(*music_player_interval/active_update_interval()), 1l
 				);
 		return conky::register_cb<mpd_cb>(period)->get_result_copy();
 	}
@@ -314,7 +299,7 @@ static inline void format_media_player_time(char *buf, const int size,
 {
 	int days, hours, minutes;
 
-	if (times_in_seconds.get(*state)) {
+	if (*times_in_seconds) {
 		snprintf(buf, size, "%d", seconds);
 		return;
 	}

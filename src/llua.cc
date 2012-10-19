@@ -50,32 +50,8 @@ namespace {
 	class lua_load_setting: public conky::simple_config_setting<std::string> {
 		typedef conky::simple_config_setting<std::string> Base;
 
-	protected:
-		void lua_setter(lua::state &l, bool init)
+		virtual void cleanup()
 		{
-			lua::stack_sentry s(l, -2);
-
-			Base::lua_setter(l, init);
-
-			if(init) {
-				std::string files = do_convert(l, -1).first;
-				while(not files.empty()) {
-					std::string::size_type pos = files.find(' ');
-					if(pos > 0) {
-						std::string file(files, 0, pos);
-						llua_load(file.c_str());
-					}
-					files.erase(0, pos==std::string::npos ? pos : pos+1);
-				}
-			}
-
-			++s;
-		}
-
-		void cleanup(lua::state &l)
-		{
-			lua::stack_sentry s(l, -1);
-
 #ifdef HAVE_SYS_INOTIFY_H
 			llua_rm_notifies();
 #endif /* HAVE_SYS_INOTIFY_H */
@@ -88,6 +64,24 @@ namespace {
 		lua_load_setting()
 			: Base("lua_load", std::string(), false)
 		{}
+
+		virtual const std::string set(const std::string &r, bool init)
+		{
+			if(init) {
+				std::string files = r;
+				while(not files.empty()) {
+					std::string::size_type pos = files.find(' ');
+					if(pos > 0) {
+						std::string file(files, 0, pos);
+						llua_load(file.c_str());
+					}
+					files.erase(0, pos==std::string::npos ? pos : pos+1);
+				}
+				return value = r;
+			}
+			return value;
+		}
+
 	};
 
 	lua_load_setting lua_load;
@@ -107,7 +101,7 @@ static int llua_conky_parse(lua_State *L)
 {
 	int n = lua_gettop(L);    /* number of arguments */
 	char *str;
-	char *buf = (char*)calloc(1, max_user_text.get(*state));
+	char *buf = (char*)calloc(1, *max_user_text);
 	if (n != 1) {
 		lua_pushstring(L, "incorrect arguments, conky_parse(string) takes exactly 1 argument");
 		lua_error(L);
@@ -117,7 +111,7 @@ static int llua_conky_parse(lua_State *L)
 		lua_error(L);
 	}
 	str = strdup(lua_tostring(L, 1));
-	evaluate(str, buf, max_user_text.get(*state));
+	evaluate(str, buf, *max_user_text);
 	lua_pushstring(L, buf);
 	free(str);
 	free(buf);
@@ -460,27 +454,27 @@ void llua_set_number(const char *key, double value)
 
 void llua_startup_hook(void)
 {
-	if (!lua_L || lua_startup_hook.get(*state).empty()) return;
-	llua_do_call(lua_startup_hook.get(*state).c_str(), 0);
+	if (!lua_L || lua_startup_hook->empty()) return;
+	llua_do_call(lua_startup_hook->c_str(), 0);
 }
 
 void llua_shutdown_hook(void)
 {
-	if (!lua_L || lua_shutdown_hook.get(*state).empty()) return;
-	llua_do_call(lua_shutdown_hook.get(*state).c_str(), 0);
+	if (!lua_L || lua_shutdown_hook->empty()) return;
+	llua_do_call(lua_shutdown_hook->c_str(), 0);
 }
 
 #ifdef BUILD_X11
 void llua_draw_pre_hook(void)
 {
-	if (!lua_L || lua_draw_hook_pre.get(*state).empty()) return;
-	llua_do_call(lua_draw_hook_pre.get(*state).c_str(), 0);
+	if (!lua_L || lua_draw_hook_pre->empty()) return;
+	llua_do_call(lua_draw_hook_pre->c_str(), 0);
 }
 
 void llua_draw_post_hook(void)
 {
-	if (!lua_L || lua_draw_hook_post.get(*state).empty()) return;
-	llua_do_call(lua_draw_hook_post.get(*state).c_str(), 0);
+	if (!lua_L || lua_draw_hook_post->empty()) return;
+	llua_do_call(lua_draw_hook_post->c_str(), 0);
 }
 
 #ifdef BUILD_LUA_EXTRAS
@@ -496,7 +490,7 @@ void llua_setup_window_table(int text_start_x, int text_start_y, int text_width,
 	if (!lua_L) return;
 	lua_newtable(lua_L);
 
-	if (out_to_x.get(*state)) {
+	if (*out_to_x) {
 #ifdef BUILD_LUA_EXTRAS
 		llua_set_userdata("drawable", "Drawable", (void*)&window.drawable);
 		llua_set_userdata("visual", "Visual", window.visual);
@@ -506,9 +500,9 @@ void llua_setup_window_table(int text_start_x, int text_start_y, int text_width,
 
 		llua_set_number("width", window.width);
 		llua_set_number("height", window.height);
-		llua_set_number("border_inner_margin", border_inner_margin.get(*state));
-		llua_set_number("border_outer_margin", border_outer_margin.get(*state));
-		llua_set_number("border_width", border_width.get(*state));
+		llua_set_number("border_inner_margin", *border_inner_margin);
+		llua_set_number("border_outer_margin", *border_outer_margin);
+		llua_set_number("border_width", *border_width);
 
 		llua_set_number("text_start_x", text_start_x);
 		llua_set_number("text_start_y", text_start_y);

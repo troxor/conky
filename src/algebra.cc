@@ -259,11 +259,11 @@ int compare(const char *expr)
 
 int check_if_match(struct text_object *obj)
 {
-	std::unique_ptr<char []> expression(new char[max_user_text.get(*state)]);
+	std::unique_ptr<char []> expression(new char[*max_user_text]);
 	int val;
 	int result = 1;
 
-	generate_text_internal(expression.get(), max_user_text.get(*state), *obj->sub);
+	generate_text_internal(expression.get(), *max_user_text, *obj->sub);
 	DBGP("parsed arg into '%s'", expression.get());
 
 	val = compare(expression.get());

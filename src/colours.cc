@@ -44,7 +44,7 @@ static void set_up_gradient(void)
 {
 	int i;
 #ifdef BUILD_X11
-	if (out_to_x.get(*state)) {
+	if (*out_to_x) {
 		colour_depth = DisplayPlanes(display, screen);
 	} else
 #endif /* BUILD_X11 */
