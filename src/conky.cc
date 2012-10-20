@@ -2985,12 +2985,6 @@ static void main_loop()
 
 	while(not terminate) {
 		struct timespec timeout;
-		const auto &om = conky::output_methods.get_threads();
-
-		/*
-		for(auto i = om.begin(); i != om.end(); ++i)
-			(*i)->do_stuff();
-		 */
 
 		// handle signals
 		timeout.tv_sec = 0;
@@ -3010,20 +3004,6 @@ static void main_loop()
 		std::chrono::milliseconds aui((int)(1000*active_update_interval()));
 		int r = 0;
 		if(last_update <= now && (now-last_update) < aui) {
-			// It is too early to update right now. Wait for the correct amount of time
-			// We allow the output methods to interrupt us if they need to do some work
-			// XXX: should we put them in a separate thread ?
-			fd_set readfds;
-			FD_ZERO(&readfds);
-
-			int maxfd = 0;
-			for(auto i = om.begin(); i != om.end(); ++i) {
-				int fd = (*i)->get_fd();
-				if(fd >= 0)
-					FD_SET(fd, &readfds);
-				maxfd = std::max(fd+1, maxfd);
-			}
-			
 			auto sleep_for = aui - (now-last_update);
 
 			auto sec = std::chrono::duration_cast<std::chrono::seconds>(sleep_for);
@@ -3033,7 +3013,7 @@ static void main_loop()
 			timeout.tv_nsec
 				= std::chrono::duration_cast<std::chrono::nanoseconds>(sleep_for).count();
 
-			r = pselect(maxfd, &readfds, NULL, NULL, &timeout, NULL);
+			r = nanosleep(&timeout, NULL);
 		}
 		if(r < 0) {
 			// some error occured. We cannot continue like this
@@ -3042,6 +3022,7 @@ static void main_loop()
 		} else if(r == 0) {
 			// timeout expired, time to collect new data
 			// XXX conky::run_all_callbacks();
+			conky::output_methods.run_all_threads();
 			last_update = std::chrono::high_resolution_clock::now();
 		}
 		// else begin a new iteration of the loop

@@ -57,18 +57,12 @@ namespace conky {
 
 	class output_method: public thread_base {
 	public:
-		output_method(bool use_pipe)
-			: thread_base(reinterpret_cast<size_t>(this), 1, false, use_pipe)
+		output_method(uint32_t period, bool use_pipe)
+			: thread_base(reinterpret_cast<size_t>(this), period, false, use_pipe)
 		{}
 
 		virtual point get_text_size(const std::string &text) const = 0;
 		virtual void draw_text(const std::string &text, const point &p, const point &size) = 0;
-		
-		/**
-		 * Returns a file descriptor which is used in the main loop in select() to wait for
-		 * events
-		 */
-		virtual int get_fd();
 	};
 
 	extern thread_container<output_method, false> output_methods;

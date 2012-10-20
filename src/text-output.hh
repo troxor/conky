@@ -5,7 +5,7 @@
  *
  * Please see COPYING for details
  *
- * Copyright (C) 2012 Pavel Labath et al.
+ * Copyright (C) 2010 Pavel Labath et al.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,10 +21,32 @@
  *
  */
 
-#include <config.h>
+#ifndef TEXT_OUTPUT_HH
+#define TEXT_OUTPUT_HH
+
+#include <vector>
 
 #include "output-method.hh"
+#include "unicode.hh"
 
 namespace conky {
-	thread_container<output_method, false> output_methods;
+
+	class text_output: public output_method {
+		unicode_converter conv;
+
+		std::vector<std::u32string> grid;
+
+	protected:
+		virtual void work();
+
+	public:
+		text_output(uint32_t period);
+
+		virtual point get_text_size(const std::string &text) const
+		{ return point(conv.to_utf32(text).length(), 1); }
+
+		virtual void draw_text(const std::string &text, const point &p, const point &size);
+	};
 }
+
+#endif /* TEXT_OUTPUT_HH */

@@ -121,7 +121,7 @@ namespace conky {
 	class thread_handle: private std::shared_ptr<Thread> {
 		typedef std::shared_ptr<Thread> Base;
 	
-		thread_handle(Thread *ptr)
+		explicit thread_handle(Thread *ptr)
 			: Base(ptr, &thread_base::deleter)
 		{}
 
@@ -131,10 +131,15 @@ namespace conky {
 
 		template<typename Thread_, bool auto_delete>
 		friend class thread_container;
+
 	public:
+		thread_handle()
+			: Base()
+		{}
 
 		using Base::operator->;
 		using Base::operator*;
+		using Base::reset;
 	};
 		
 	/*
