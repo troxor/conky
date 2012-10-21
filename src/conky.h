@@ -38,6 +38,8 @@
 #include <sys/utsname.h> /* struct uname_s */
 #include <arpa/inet.h>
 #include <memory>
+
+#include "layout-item.hh"
 #include "luamm.hh"
 
 #if defined(HAS_MCHECK_H)
@@ -156,7 +158,7 @@ struct conftree {
 
 void load_config_file();
 
-char *get_global_text(void);
+const std::shared_ptr<conky::layout_item>& get_global_text();
 extern long global_text_lines;
 
 #define MAX_TEMPLATES 10

@@ -253,7 +253,9 @@ namespace conky {
 	class x11_output: public output_method {
 	public:
 		virtual point get_text_size(const std::string &text) const;
+		virtual point get_text_size(const std::u32string &text) const;
 		virtual void draw_text(const std::string &text, const point &p, const point &size);
+		virtual void draw_text(const std::u32string &text, const point &p, const point &size);
 	};
 
 }

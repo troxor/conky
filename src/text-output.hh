@@ -42,10 +42,16 @@ namespace conky {
 	public:
 		text_output(uint32_t period);
 
-		virtual point get_text_size(const std::string &text) const
-		{ return point(conv.to_utf32(text).length(), 1); }
+		virtual point get_text_size(const std::u32string &text) const
+		{ return point(text.length(), 1); }
 
-		virtual void draw_text(const std::string &text, const point &p, const point &size);
+		virtual point get_text_size(const std::string &text) const
+		{ return get_text_size(conv.to_utf32(text)); }
+
+		virtual void draw_text(const std::u32string &text, const point &p, const point &size);
+
+		virtual void draw_text(const std::string &text, const point &p, const point &size)
+		{ draw_text(conv.to_utf32(text), p, size); }
 	};
 }
 

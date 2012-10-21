@@ -51,7 +51,6 @@ namespace conky {
 	std::shared_ptr<layout_item> layout_item::create(lua::state &l)
 	{
 		lua::stack_sentry s(l, -1);
-		l.checkstack(1);
 
 		switch(l.type(-1)) {
 			case lua::TSTRING:
@@ -62,15 +61,15 @@ namespace conky {
 				try {
 					return get_data_source(l, -1);
 				}
-				catch(lua::check_error &) { /*i gnore */ }
+				catch(lua::check_error &) { /* ignore */ }
 				try {
 					return *l.checkudata<std::shared_ptr<layout_item>>(-1, layout_item_metatable);
 				}
-				catch(lua::check_error &) { /*i gnore */ }
+				catch(lua::check_error &) { /* ignore */ }
 			default:
 				NORM_ERR("Unrecognized type of parameter: %s", l.type_name(l.type(-1)));
-				return {};
 		}
+		return {};
 	}
 
 	void export_layout_engines(lua::state &l)

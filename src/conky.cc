@@ -516,12 +516,10 @@ conky::range_config_setting<unsigned int> text_buffer_size("text_buffer_size",
 /* pad percentages to decimals? */
 static conky::simple_config_setting<int> pad_percents("pad_percents", 0, false);
 
-static char *global_text = 0;
+static std::shared_ptr<conky::layout_item> global_text;
+const std::shared_ptr<conky::layout_item>& get_global_text()
+{ return global_text; }
 
-char *get_global_text(void)
-{
-	return global_text;
-}
 
 long global_text_lines;
 
@@ -597,26 +595,6 @@ static inline void for_each_line(char *b, int f(char *, int))
 	if (ps < pe) {
 		f(ps, special_index);
 	}
-}
-
-static void convert_escapes(char *buf)
-{
-	char *p = buf, *s = buf;
-
-	while (*s) {
-		if (*s == '\\') {
-			s++;
-			if (*s == 'n') {
-				*p++ = '\n';
-			} else if (*s == '\\') {
-				*p++ = '\\';
-			}
-			s++;
-		} else {
-			*p++ = *s++;
-		}
-	}
-	*p = '\0';
 }
 
 /* Prints anything normally printed with snprintf according to the current value
@@ -747,16 +725,6 @@ void set_current_text_color(long colour)
 long get_current_text_color(void)
 {
 	return current_text_color;
-}
-
-static void extract_variable_text(const char *p)
-{
-	free_text_objects(&global_root_object);
-	free_and_zero(tmpstring1);
-	free_and_zero(tmpstring2);
-	free_and_zero(text_buffer);
-
-	extract_variable_text_internal(&global_root_object, p);
 }
 
 void parse_conky_vars(struct text_object *root, const char *txt,
@@ -2518,7 +2486,7 @@ void clean_up_without_threads(void *memtofree1, void* memtofree2)
 	free_and_zero(tmpstring1);
 	free_and_zero(tmpstring2);
 	free_and_zero(text_buffer);
-	free_and_zero(global_text);
+	global_text.reset();
 
 #ifdef BUILD_PORT_MONITORS
 	tcp_portmon_clear();
@@ -2648,18 +2616,10 @@ void load_config_file()
 	l.getglobal("conky");
 	l.getfield(-1, "text");
 	l.replace(-2);
-	if(l.type(-1) != lua::TSTRING)
-		throw conky::error(_("missing text block in configuration"));
+	global_text = conky::layout_item::create(l);
+	if(not global_text)
+		throw conky::error(_("missing or corrupt text block in configuration"));
 	
-	/* Remove \\-\n. */
-	l.gsub(l.tocstring(-1), "\\\n", "");
-	l.replace(-2);
-	global_text = strdup(l.tocstring(-1));
-	l.pop();
-
-	// XXX: what does this do?
-	//	global_text_lines = line + 1;
-
 #if 0
 #if defined(BUILD_NCURSES)
 #if defined(BUILD_X11)
@@ -2861,12 +2821,13 @@ void initialisation(int argc, char **argv) {
 				break;
 #endif
 #endif /* BUILD_X11 */
+#if 0 // XXX
 			case 't':
 				free_and_zero(global_text);
 				global_text = strndup(optarg, *max_user_text);
 				convert_escapes(global_text);
 				break;
-
+#endif
 			case 'u':
 				state->pushstring(optarg);
 				update_interval.lua_set(*state);
@@ -2907,9 +2868,6 @@ void initialisation(int argc, char **argv) {
 	}
 #endif
 
-	/* generate text and get initial size */
-	extract_variable_text(global_text);
-	free_and_zero(global_text);
 	/* fork */
 	if (*fork_to_background && first_pass) {
 		int pid = fork();

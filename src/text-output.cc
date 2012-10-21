@@ -30,6 +30,8 @@
 
 #include "setting.hh"
 
+#include "conky.h"
+
 namespace conky {
 
 	namespace {
@@ -73,14 +75,13 @@ namespace conky {
 		: output_method(period, false), grid(25, std::u32string(80, ' '))
 	{}
 
-	void text_output::draw_text(const std::string &text, const point &p, const point &size)
+	void text_output::draw_text(const std::u32string &text, const point &p, const point &size)
 	{
 		if(p.y>=0 && p.y<static_cast<ssize_t>(grid.size())
 				&& p.x<static_cast<ssize_t>(grid[p.y].size()) && size.y>0 && size.x>0) {
 
-			const std::u32string &t = conv.to_utf32(text);
 
-			auto tbegin = t.begin();
+			auto tbegin = text.begin();
 			auto gbegin = grid[p.y].begin();
 			if(p.x < 0)
 				tbegin -= p.x;
@@ -88,13 +89,15 @@ namespace conky {
 				gbegin += p.x;
 
 			size_t n = std::min(grid[p.y].end()-gbegin,
-					std::min(t.end()-tbegin, static_cast<ssize_t>(size.x)));
+					std::min(text.end()-tbegin, static_cast<ssize_t>(size.x)));
 			std::copy_n(tbegin, n, gbegin);
 		}
 	}
 
 	void text_output::work()
 	{
+		get_global_text()->size(*this);
+		get_global_text()->draw(*this, point(0, 0), point(80, 25));
 		for(auto y = grid.begin(); y != grid.end(); ++y)
 			std::cout << conv.to_utf8(*y) << std::endl;
 	}
