@@ -27,6 +27,7 @@
 #include <map>
 #include <vector>
 
+#include "list_map.hh"
 #include "layout-item.hh"
 #include "luamm.hh"
 
@@ -48,7 +49,7 @@ namespace conky {
 			};
 
 			std::shared_ptr<layout_item> item;
-			std::map<const output_method *, item_data> data;
+			list_map<const output_method *, item_data> data;
 
 			cell() = default;
 			explicit cell(const std::shared_ptr<layout_item> &item_) : item(item_) {}
