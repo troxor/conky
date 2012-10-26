@@ -42,30 +42,28 @@ namespace conky {
 			uint32_t width;
 			alignment align;
 		};
-		struct cell {
-			struct item_data {
-				point pos;
-				point size;
-			};
-
-			std::shared_ptr<layout_item> item;
-			list_map<const output_method *, item_data> data;
-
-			cell() = default;
-			explicit cell(const std::shared_ptr<layout_item> &item_) : item(item_) {}
+		struct item_data {
+			point pos;
+			point size;
 		};
-		typedef std::vector<cell> Row;
+
+		typedef std::vector<std::shared_ptr<layout_item>> ItemRow;
+		typedef std::vector<item_data> DataRow;
+		typedef std::vector<DataRow> DataGrid;
+		typedef list_map<const output_method *, DataGrid> DataMap;
 
 		std::vector<column> columns;
-		std::vector<Row> grid;
+		std::vector<ItemRow> item_grid;
+		DataMap data_map;
+		std::mutex data_mutex;
 
 		static column default_column;
 
 		size_t read_columns(lua::state &l);
 		column read_column(lua::state &l, size_t colno);
 
-		Row read_row(lua::state &l, size_t rowno, size_t cols);
-		cell read_cell(lua::state &l, size_t rowno, size_t colno);
+		ItemRow read_row(lua::state &l, size_t rowno, size_t cols);
+		std::shared_ptr<layout_item> read_cell(lua::state &l, size_t rowno, size_t colno);
 
 	public:
 		table_layout(lua::state &l);

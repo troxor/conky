@@ -100,12 +100,12 @@ namespace conky {
 		return columns.size();
 	}
 
-	table_layout::cell table_layout::read_cell(lua::state &l, size_t rowno, size_t colno)
+	std::shared_ptr<layout_item> table_layout::read_cell(lua::state &l, size_t rowno, size_t colno)
 	{
 		lua::stack_sentry s(l, -1);
 
 		try {
-			return cell(layout_item::create(l));
+			return layout_item::create(l);
 		}
 		catch(std::runtime_error &e) {
 			NORM_ERR("table_layout: Cell (%zd, %zd) invalid.\n%s", rowno, colno, e.what());
@@ -113,7 +113,7 @@ namespace conky {
 		}
 	}
 
-	table_layout::Row table_layout::read_row(lua::state &l, size_t rowno, size_t cols)
+	table_layout::ItemRow table_layout::read_row(lua::state &l, size_t rowno, size_t cols)
 	{
 		l.checkstack(1);
 		lua::stack_sentry s(l, -1);
@@ -123,7 +123,7 @@ namespace conky {
 			return {};
 		}
 
-		Row row;
+		ItemRow row;
 
 		for(size_t i = 1; l.rawgeti(-1, i), (cols==0?!l.isnil(-1):i<=cols); ++i) {
 			row.push_back(read_cell(l, rowno, i));
@@ -141,31 +141,44 @@ namespace conky {
 		size_t cols = read_columns(l);
 
 		for(size_t i = 1; l.rawgeti(-1, i), !l.isnil(-1); ++i) {
-			grid.push_back(read_row(l, i, cols));
+			item_grid.push_back(read_row(l, i, cols));
 		} l.pop();
 
 		if(cols == 0) {
-			for(auto i = grid.begin(); i != grid.end(); ++i) {
+			for(auto i = item_grid.begin(); i != item_grid.end(); ++i) {
 				if(i->size() > cols)
 					cols = i->size();
 			}
 			columns.resize(cols, default_column);
 
-			for(auto i = grid.begin(); i != grid.end(); ++i)
+			for(auto i = item_grid.begin(); i != item_grid.end(); ++i)
 				i->resize(cols, {});
 		}
 	}
 
 	point table_layout::size(const output_method &om)
 	{
+		if(item_grid.empty())
+			return { 0, 0 };
+
+		DataMap::iterator data;
+		{
+			std::lock_guard<std::mutex> l(data_mutex);
+			data = data_map.find(&om);
+			if(data == data_map.end()) {
+				data = data_map.insert(DataMap::value_type(&om,
+								DataGrid(item_grid.size(), DataRow(item_grid[0].size())))).first;
+			}
+		}
+
 		point res;
 		int32_t ypos = 0;
-		for(auto i = grid.begin(); i != grid.end(); ++i) {
+		for(size_t i = 0; i < item_grid.size(); ++i) {
 			int32_t height = 0;
 			int32_t xpos = 0;
-			for(auto j = i->begin(); j != i->end(); ++j) {
-				cell::item_data &d = j->data[&om];
-				d.size = j->item->size(om);
+			for(size_t j = 0; j < item_grid[i].size(); ++j) {
+				item_data &d = data->second[i][j];
+				d.size = item_grid[i][j]->size(om);
 				d.pos = { xpos, ypos };
 				height = std::max(height, d.size.y);
 				xpos += d.size.x + 5;
@@ -177,11 +190,21 @@ namespace conky {
 
 	void table_layout::draw(output_method &om, const point &p, const point &size)
 	{
-		for(auto i = grid.begin(); i != grid.end(); ++i) {
-			for(auto j = i->begin(); j != i->end(); ++j) {
-				cell::item_data &d = j->data[&om];
+		if(item_grid.empty())
+			return;
 
-				j->item->draw(om, p+d.pos, min(d.size, size-d.pos));
+		DataMap::iterator data;
+		{
+			std::lock_guard<std::mutex> l(data_mutex);
+			data = data_map.find(&om);
+			assert(data != data_map.end());
+		}
+
+		for(size_t i = 0; i < item_grid.size(); ++i) {
+			for(size_t j = 0; j < item_grid[i].size(); ++j) {
+				item_data &d = data->second[i][j];
+
+				item_grid[i][j]->draw(om, p+d.pos, min(d.size, size-d.pos));
 			}
 		}
 

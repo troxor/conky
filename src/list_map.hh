@@ -48,10 +48,19 @@ public:
 	typedef ptrdiff_t difference_type;
 	typedef size_t size_type;
 	typedef Compare key_compare;
-	typedef void* value_compare;
+	class value_compare: public std::binary_function<value_type, value_type, bool> {
+		friend class list_map<Key, Data, Compare, Alloc>;
+
+		key_compare comp;
+		value_compare(key_compare comp_) : comp(comp_) {}
+
+	public:
+		bool operator()(const value_type &a, const value_type &b)
+		{ return comp(a.first, b.first); }
+	};
 
 private:
-	key_compare key_comp_;
+	value_compare value_comp_;
 
 public:
 
@@ -59,7 +68,7 @@ public:
 	typedef typename Base::const_iterator const_iterator;
 
 	explicit list_map(const key_compare &c = key_compare())
-		: Base(), key_comp_(c)
+		: Base(), value_comp_(c)
 	{}
 
 	list_map(list_map &&r);
@@ -84,27 +93,53 @@ public:
 		auto j = Base::end();
 		for(;;) {
 			auto t = i++;
-			if(i == j)
-				return Base::emplace_after(t, k, data_type())->second;
 
-			if(key_comp_(k, i->first)) // less than the current element
+			if(i == j or value_comp_.comp(k, i->first)) // at end or less than the current element
 				return Base::emplace_after(t, k, data_type())->second;
-			else if(not key_comp_(i->first, k)) // equal to the current element
+			else if(not value_comp_.comp(i->first, k)) // equal to the current element
 				return i->second;
 			// else, strictly greater than current element, continue
 		}
 	}
 
-	const key_compare& key_comp();
-	const value_compare& value_comp();
+	const key_compare& key_comp() const { return value_comp_.comp; }
+	const value_compare& value_comp() const { return value_comp_; }
 
-	std::pair<iterator, bool> insert(const value_type &x);
+	std::pair<iterator, bool> insert(const value_type &x)
+	{
+		auto i = Base::before_begin();
+		auto j = Base::end();
+		for(;;) {
+			auto t = i++;
+
+			if(i == j or value_comp_(x, *i)) // at end or less than the current element
+				return { Base::insert_after(t, x), true };
+			else if(not value_comp_(*i, x)) // equal to the current element
+				return { i, false };
+			// else, strictly greater than current element, continue
+		}
+	}
+
 	iterator insert(const iterator &pos, const value_type &x);
 	size_type erase(const key_type &k);
 	void erase(const iterator &p);
 	void erase(const iterator &p, const iterator &q);
 	void clear();
-	iterator find(const key_type &k);
+
+	iterator find(const key_type &k)
+	{
+		auto i = Base::before_begin();
+		auto j = Base::end();
+		for(;;) {
+			++i;
+
+			if(i==j or value_comp_.comp(k, i->first))
+				return j;
+			else if(not value_comp_.comp(i->first, k))
+				return i;
+		}
+	}
+
 	const_iterator find(const key_type &k) const;
 	size_type count(const key_type &k);
 
@@ -117,8 +152,7 @@ public:
 
 	iterator begin();
 	const_iterator begin() const;
-	iterator end();
-	const_iterator end() const;
+	using Base::end;
 	size_type size() const;
 	size_type max_size() const;
 	bool empty() const;
