@@ -156,9 +156,23 @@ namespace conky {
 		}
 	}
 
+	point::type table_layout::align(point::type have, point::type need, alignment a)
+	{
+		switch(a) {
+			case alignment::LEFT:
+				return 0;
+			case alignment::RIGHT:
+				return have-need;
+			case alignment::CENTER:
+				return (have-need)/2;
+			default:
+				assert(0);
+		}
+	}
+
 	point table_layout::size(const output_method &om)
 	{
-		if(item_grid.empty())
+		if(item_grid.empty() || item_grid[0].empty())
 			return { 0, 0 };
 
 		DataMap::iterator data;
@@ -171,26 +185,46 @@ namespace conky {
 			}
 		}
 
+		std::vector<point::type> y_data(item_grid.size(), 0);
+		std::vector<point::type> x_data(item_grid[0].size(), 0);
+
+		point separator = om.get_text_size(U"X");
+		separator.y /= 2;
 		point res;
-		int32_t ypos = 0;
+		point::type ypos = 0;
 		for(size_t i = 0; i < item_grid.size(); ++i) {
-			int32_t height = 0;
-			int32_t xpos = 0;
+			point::type xpos = 0;
 			for(size_t j = 0; j < item_grid[i].size(); ++j) {
 				item_data &d = data->second[i][j];
 				d.size = item_grid[i][j]->size(om);
-				d.pos = { xpos, ypos };
-				height = std::max(height, d.size.y);
-				xpos += d.size.x + 5;
+				xpos += d.size.x + separator.x;
+
+				x_data[j] = std::max(x_data[j], d.size.x);
+				y_data[i] = std::max(y_data[i], d.size.y);
 			}
-			ypos += height + 5;
+			res.x = std::max(res.x, xpos-separator.x);
+			ypos += y_data[i] + separator.y;
 		}
+		res.y = ypos-separator.y;
+
+		ypos = 0;
+		for(size_t i = 0; i < item_grid.size(); ++i) {
+			point::type xpos = 0;
+			for(size_t j = 0; j < item_grid[i].size(); ++j) {
+				item_data &d = data->second[i][j];
+				d.pos.x = xpos + align(x_data[j], d.size.x, columns[j].align);
+				d.pos.y = ypos + align(y_data[i], d.size.y, alignment::CENTER);
+				xpos += x_data[j] + separator.x;
+			}
+			ypos += y_data[i] + separator.y;
+		}
+
 		return res;
 	}
 
 	void table_layout::draw(output_method &om, const point &p, const point &size)
 	{
-		if(item_grid.empty())
+		if(item_grid.empty() || item_grid[0].empty())
 			return;
 
 		DataMap::iterator data;

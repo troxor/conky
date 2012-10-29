@@ -60,7 +60,8 @@ namespace conky {
 		static column default_column;
 
 		size_t read_columns(lua::state &l);
-		column read_column(lua::state &l, size_t colno);
+		static column read_column(lua::state &l, size_t colno);
+		static point::type align(point::type have, point::type need, alignment a);
 
 		ItemRow read_row(lua::state &l, size_t rowno, size_t cols);
 		std::shared_ptr<layout_item> read_cell(lua::state &l, size_t rowno, size_t colno);
