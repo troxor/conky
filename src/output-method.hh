@@ -34,14 +34,16 @@
 namespace conky {
 
 	struct point {
-		int32_t x;
-		int32_t y;
+		typedef int32_t type;
+
+		type x;
+		type y;
 
 		point()
 			: x(0), y(0)
 		{}
 
-		point(int32_t x_, int32_t y_)
+		point(type x_, type y_)
 			: x(x_), y(y_)
 		{}
 	};
@@ -54,6 +56,9 @@ namespace conky {
 
 	inline point min(const point &l, const point &r)
 	{ return { std::min(l.x, r.x), std::min(l.y, r.y) }; }
+
+	inline point operator/(const point &l, int32_t r)
+	{ return { l.x/r, l.y/r }; }
 
 	class output_method: public thread_base {
 	public:
