@@ -139,9 +139,6 @@ int global_debug_level = 0;
 /* disable inotify auto reload feature if desired */
 static conky::simple_config_setting<bool> disable_auto_reload("disable_auto_reload", false, false);
 
-/* two strings for internal use */
-static char *tmpstring1, *tmpstring2;
-
 enum spacer_state {
 	NO_SPACER = 0,
 	LEFT_SPACER,
@@ -569,11 +566,6 @@ int calc_text_width(const char *s)
 	}
 #endif /* BUILD_X11 */
 }
-
-/* formatted text to render on screen, generated in generate_text(),
- * drawn in draw_stuff() */
-
-static char *text_buffer;
 
 /* quite boring functions */
 
@@ -2483,9 +2475,6 @@ void clean_up_without_threads(void *memtofree1, void* memtofree2)
 	}
 
 	free_text_objects(&global_root_object);
-	free_and_zero(tmpstring1);
-	free_and_zero(tmpstring2);
-	free_and_zero(text_buffer);
 	global_text.reset();
 
 #ifdef BUILD_PORT_MONITORS
@@ -2893,13 +2882,6 @@ void initialisation(int argc, char **argv) {
 				throw fork_throw();
 		}
 	}
-
-	text_buffer = (char*)malloc(*max_user_text);
-	memset(text_buffer, 0, *max_user_text);
-	tmpstring1 = (char*)malloc(*text_buffer_size);
-	memset(tmpstring1, 0, *text_buffer_size);
-	tmpstring2 = (char*)malloc(*text_buffer_size);
-	memset(tmpstring2, 0, *text_buffer_size);
 
 #if 0 && BUILD_X11
 	X11_create_window();
