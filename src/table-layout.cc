@@ -158,6 +158,8 @@ namespace conky {
 
 	point::type table_layout::align(point::type have, point::type need, alignment a)
 	{
+		if(need > have)
+			return 0;
 		switch(a) {
 			case alignment::LEFT:
 				return 0;
@@ -206,6 +208,11 @@ namespace conky {
 			ypos += y_data[i] + separator.y;
 		}
 		res.y = ypos-separator.y;
+
+		for(size_t j = 0; j < x_data.size(); ++j) {
+			if(columns[j].width)
+				x_data[j] = columns[j].width;
+		}
 
 		ypos = 0;
 		for(size_t i = 0; i < item_grid.size(); ++i) {
