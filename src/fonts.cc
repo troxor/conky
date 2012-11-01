@@ -35,6 +35,8 @@ int selected_font = 0;
 std::vector<font_list> fonts;
 char fontloaded = 0;
 
+#if 0
+
 const std::string font_setting::set(const std::string &r, bool init)
 {
 	if(fonts.size() == 0)
@@ -197,3 +199,6 @@ void load_fonts(bool utf8) {
 		}
 	}
 }
+
+#endif
+int add_font(const char *) { return 0; }

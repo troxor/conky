@@ -52,11 +52,12 @@
 bool have_argb_visual;
 #endif /* BUILD_ARGB */
 
-/* some basic X11 stuff */
-Display *display = NULL;
+// XXX: TEMPORARY stub variables
+Display *display;
 int display_width;
 int display_height;
 int screen;
+
 
 /* workarea from _NET_WORKAREA, this is where window / text is aligned */
 int workarea[4];
@@ -69,28 +70,23 @@ char window_created = 0;
 static void update_workarea(void);
 static Window find_desktop_window(Window *p_root, Window *p_desktop);
 static Window find_subwindow(Window win, int w, int h);
-static void init_X11();
-static void deinit_X11();
 static void init_window(bool own);
 
 /********************* <SETTINGS> ************************/
-namespace priv {
-	const bool out_to_x_setting::set(const bool &r, bool init)
-	{
-		if(init) {
+namespace conky {
+	namespace priv {
+		const bool out_to_x_setting::set(const bool &r, bool init)
+		{
+			assert(init);
+
 			if(r)
-				init_X11();
-			value = r;
+				om = output_methods.register_thread<x11_output>(1, *display_name);
+
+			return value;
 		}
-		return value;
 	}
-
-	void out_to_x_setting::cleanup()
-	{
-		if(value)
-			deinit_X11();
-	}
-
+}
+namespace priv {
 	const bool own_window_setting::set(const bool &r, bool init)
 	{
 		if(init) {
@@ -188,9 +184,10 @@ namespace priv {
 		return value;
 	}
 
-	unsigned long colour_traits::from_lua(lua::state &l, int index, const std::string &)
+	unsigned long colour_traits::from_lua(lua::state &/*l*/, int /*index*/, const std::string &)
 	{
-		return *out_to_x ? get_x11_color(l.tostring(index)) : 0;
+		return 0;
+//		return *out_to_x ? get_x11_color(l.tostring(index)) : 0;
 	}
 #endif
 }
@@ -271,7 +268,7 @@ namespace {
 
 conky::simple_config_setting<alignment>   text_alignment("alignment", BOTTOM_LEFT, false);
 conky::simple_config_setting<std::string> display_name("display", std::string(), false);
-priv::out_to_x_setting                    out_to_x;
+conky::priv::out_to_x_setting                    out_to_x;
 
 priv::colour_setting					  color[10] = {
 	{ "color0", 0xffffff },
@@ -362,32 +359,19 @@ static int __attribute__((noreturn)) x11_ioerror_handler(Display *d)
 }
 #endif /* DEBUG */
 
-/* X11 initializer */
-static void init_X11()
-{
-	if (!display) {
-		const std::string &dispstr = display_name->c_str();
+namespace conky {
+	x11_output::x11_output(uint32_t period, const std::string &display_)
+		: output_method(period, false)
+	{
 		// passing NULL to XOpenDisplay should open the default display
-		const char *disp = dispstr.size() ? dispstr.c_str() : NULL;
+		const char *disp = display_.size() ? display_.c_str() : NULL;
 		if ((display = XOpenDisplay(disp)) == NULL) {
 			throw std::runtime_error(std::string("can't open display: ") + XDisplayName(disp));
 		}
-	}
 
-	info.x11.monitor.number = 1;
-	info.x11.monitor.current = 0;
-	info.x11.desktop.current = 1;
-	info.x11.desktop.number = 1;
-	info.x11.desktop.all_names.clear();
-	info.x11.desktop.name.clear();
-
-	screen = DefaultScreen(display);
-	display_width = DisplayWidth(display, screen);
-	display_height = DisplayHeight(display, screen);
-
-	get_x11_desktop_info(display, 0);
-
-	update_workarea();
+		screen = DefaultScreen(display);
+		display_width = DisplayWidth(display, screen);
+		display_height = DisplayHeight(display, screen);
 
 #ifdef DEBUG
 		_Xdebug = 1;
@@ -395,12 +379,15 @@ static void init_X11()
 		XSetErrorHandler(&x11_error_handler);
 		XSetIOErrorHandler(&x11_ioerror_handler);
 #endif /* DEBUG */
-}
+	}
 
-static void deinit_X11()
-{
-	XCloseDisplay(display);
-	display = NULL;
+	void x11_output::work() {}
+	point x11_output::get_text_size(const std::u32string &) const
+	{ return { 0, 0 }; }
+	point x11_output::get_text_size(const std::string &) const
+	{ return { 0, 0 }; }
+	void x11_output::draw_text(const std::string &, const point &, const point &) {}
+	void x11_output::draw_text(const std::u32string &, const point &, const point &) {}
 }
 
 static void update_workarea(void)

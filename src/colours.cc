@@ -33,6 +33,7 @@
 #include "x11.h"
 #endif
 
+#if 0
 /* precalculated: 31/255, and 63/255 */
 #define CONST_8_TO_5_BITS 0.12156862745098
 #define CONST_8_TO_6_BITS 0.247058823529412
@@ -193,3 +194,6 @@ long get_x11_color(const char *name)
 long get_x11_color(const std::string &colour)
 { return get_x11_color(colour.c_str()); }
 #endif
+#endif
+long get_x11_color(const char *) { return 0; }
+unsigned int adjust_colours(unsigned int) { return 0; }

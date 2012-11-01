@@ -95,11 +95,6 @@ struct conky_window {
 extern bool have_argb_visual;
 #endif
 
-extern Display *display;
-extern int display_width;
-extern int display_height;
-extern int screen;
-
 extern int workarea[4];
 
 extern struct conky_window window;
@@ -139,20 +134,51 @@ enum alignment {
 
 extern conky::simple_config_setting<alignment>   text_alignment;
 
-namespace priv {
-	class out_to_x_setting: public conky::simple_config_setting<bool> {
-		typedef conky::simple_config_setting<bool> Base;
-	
+namespace conky {
+
+	class x11_output: public output_method {
+		Display *display;
+		int display_width;
+		int display_height;
+		int screen;
+
 	protected:
-		virtual void cleanup();
+		virtual void work();
 
 	public:
-		virtual const bool set(const bool &r, bool init);
-		out_to_x_setting()
-			: Base("out_to_x", true, false)
-		{}
+		x11_output(uint32_t period, const std::string &display_);
+		~x11_output() { XCloseDisplay(display); }
+
+		virtual point get_text_size(const std::string &text) const;
+		virtual point get_text_size(const std::u32string &text) const;
+		virtual void draw_text(const std::string &text, const point &p, const point &size);
+		virtual void draw_text(const std::u32string &text, const point &p, const point &size);
 	};
-	
+
+	namespace priv {
+		class out_to_x_setting: public simple_config_setting<bool> {
+			typedef simple_config_setting<bool> Base;
+
+			thread_handle<x11_output> om;
+		protected:
+			virtual void cleanup()
+			{ om.reset(); }
+
+		public:
+			out_to_x_setting()
+				: Base("out_to_x", true, false)
+			{}
+
+			virtual const bool set(const bool &r, bool init);
+
+			const thread_handle<x11_output>& get_om()
+			{ return om; }
+		};
+
+	} /* namespace conky::priv */
+} /* namespace conky */
+
+namespace priv {
 	class own_window_setting: public conky::simple_config_setting<bool> {
 		typedef conky::simple_config_setting<bool> Base;
 	
@@ -207,8 +233,8 @@ namespace priv {
 	};
 }
 
-extern priv::out_to_x_setting                    out_to_x;
 extern conky::simple_config_setting<std::string> display_name;
+extern conky::priv::out_to_x_setting             out_to_x;
 extern priv::colour_setting						 color[10];
 extern priv::colour_setting						 default_color;
 extern priv::colour_setting						 default_shade_color;
@@ -247,18 +273,6 @@ extern priv::use_xdbe_setting					 use_xdbe;
 #else
 extern priv::use_xpmdb_setting					 use_xpmdb;
 #endif
-
-namespace conky {
-
-	class x11_output: public output_method {
-	public:
-		virtual point get_text_size(const std::string &text) const;
-		virtual point get_text_size(const std::u32string &text) const;
-		virtual void draw_text(const std::string &text, const point &p, const point &size);
-		virtual void draw_text(const std::u32string &text, const point &p, const point &size);
-	};
-
-}
 
 #endif /*X11_H_*/
 #endif /* BUILD_X11 */
