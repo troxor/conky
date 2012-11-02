@@ -59,18 +59,8 @@ int display_height;
 int screen;
 
 
-/* workarea from _NET_WORKAREA, this is where window / text is aligned */
-int workarea[4];
-
 /* Window stuff */
 struct conky_window window;
-char window_created = 0;
-
-/* local prototypes */
-static void update_workarea(void);
-static Window find_desktop_window(Window *p_root, Window *p_desktop);
-static Window find_subwindow(Window win, int w, int h);
-static void init_window(bool own);
 
 /********************* <SETTINGS> ************************/
 namespace conky {
@@ -82,30 +72,27 @@ namespace conky {
 			if(r)
 				om = output_methods.register_thread<x11_output>(1, *display_name);
 
-			return value;
+			return value = r;
 		}
-	}
-}
-namespace priv {
-	const bool own_window_setting::set(const bool &r, bool init)
-	{
-		if(init) {
-			if(r) {
-#ifndef OWN_WINDOW
-				std::cerr << "Support for the own_window setting has been "
-							 "disabled during compilation\n";
-#endif
-			}
 
+		const bool own_window_setting::set(const bool &r, bool init)
+		{
+			assert(init);
 			if(*out_to_x) {
-				init_window(r);
+				if(r)
+					out_to_x.get_om()->use_own_window();
+				else
+					out_to_x.get_om()->use_root_window();
 				value = r;
 			} else
 				value = false;
-		}
-		return value;
-	}
 
+			return value;
+		}
+	} /* namespace conky::priv */
+} /* namespace conky */
+
+namespace priv {
 #ifdef BUILD_XDBE
 	bool use_xdbe_setting::set_up()
 	{
@@ -159,7 +146,7 @@ namespace priv {
 		window.back_buffer = XCreatePixmap(display,
 				window.window, window.width+1, window.height+1, DefaultDepth(display, screen));
 		if (window.back_buffer != None) {
-			window.drawable = window.back_buffer;
+// XXX			window.drawable = window.back_buffer;
 		} else {
 			NORM_ERR("Failed to allocate back buffer");
 			return false;
@@ -316,7 +303,7 @@ conky::range_config_setting<int>          own_window_argb_value("own_window_argb
 																0, 255, 255, false);
 #endif
 #endif /*OWN_WINDOW*/
-priv::own_window_setting				  own_window;
+conky::priv::own_window_setting			  own_window;
 
 #ifdef BUILD_XDBE
 priv::use_xdbe_setting			 		  use_xdbe;
@@ -381,6 +368,121 @@ namespace conky {
 #endif /* DEBUG */
 	}
 
+	void x11_output::use_root_window()
+	{
+		XWindowAttributes attrs;
+
+		find_root_and_desktop_window();
+		window = desktop;
+		visual = DefaultVisual(display, screen);
+		colourmap = DefaultColormap(display, screen);
+
+		if (XGetWindowAttributes(display, window, &attrs)) {
+			size = { attrs.width, attrs.height };
+		}
+
+		fprintf(stderr, PACKAGE_NAME": drawing to desktop window\n");
+
+		/* Drawable is same as window. This may be changed by double buffering. */
+		drawable = window;
+
+		XFlush(display);
+
+		XSelectInput(display, window, ExposureMask | PropertyChangeMask);
+	}
+
+	void x11_output::use_own_window() { }
+
+	/* Find root window and desktop window.
+	 * Return desktop window on success,
+	 * and set root and desktop byref return values.
+	 * Return 0 on failure. */
+	void x11_output::find_root_and_desktop_window()
+	{
+		Atom type;
+		int format;
+		unsigned long nitems, bytes;
+		unsigned int n;
+
+		root = RootWindow(display, screen);
+		Window win = root;
+		Window troot, parent, *children;
+		unsigned char *buf = NULL;
+
+		/* some window managers set __SWM_VROOT to some child of root window */
+		XQueryTree(display, root, &troot, &parent, &children, &n);
+		for(unsigned int i = 0; i < n; i++) {
+			if (XGetWindowProperty(display, children[i], ATOM(__SWM_VROOT), 0, 1,
+						False, XA_WINDOW, &type, &format, &nitems, &bytes, &buf)
+					== Success && type == XA_WINDOW) {
+
+				win = *(Window *) buf;
+
+				XFree(buf);
+				XFree(children);
+
+				fprintf(stderr,
+						PACKAGE_NAME": desktop window (%lx) found from __SWM_VROOT property\n",
+						win);
+
+				root = win;
+				desktop = win;
+				return;
+			}
+
+			if (buf) {
+				XFree(buf);
+				buf = 0;
+			}
+		}
+		XFree(children);
+
+		/* get subwindows from root */
+		desktop = find_subwindow(root);
+
+		if (win != root) {
+			fprintf(stderr,
+					PACKAGE_NAME": desktop window (%lx) is subwindow of root window (%lx)\n",
+					win, root);
+		} else {
+			fprintf(stderr, PACKAGE_NAME": desktop window (%lx) is root window\n", win);
+		}
+	}
+
+	Window x11_output::find_subwindow(Window win)
+	{
+		unsigned int i, j;
+		Window troot, parent, *children;
+		unsigned int n;
+
+		/* search subwindows with same size as display or work area */
+
+		for (i = 0; i < 10; i++) {
+			XQueryTree(display, win, &troot, &parent, &children, &n);
+
+			for (j = n; j > 0; --j) {
+				XWindowAttributes attrs;
+
+				if (XGetWindowAttributes(display, children[j-1], &attrs)) {
+					/* Window must be mapped and same size as display or
+					 * work space */
+					if (attrs.map_state != 0
+							&& attrs.width == display_width && attrs.height == display_height) {
+						win = children[j-1];
+						break;
+					}
+				}
+			}
+
+			XFree(children);
+			if (j == 0) {
+				break;
+			}
+		}
+
+		return win;
+	}
+
 	void x11_output::work() {}
 	point x11_output::get_text_size(const std::u32string &) const
 	{ return { 0, 0 }; }
@@ -388,88 +490,6 @@ namespace conky {
 	{ return { 0, 0 }; }
 	void x11_output::draw_text(const std::string &, const point &, const point &) {}
 	void x11_output::draw_text(const std::u32string &, const point &, const point &) {}
-}
-
-static void update_workarea(void)
-{
-	/* default work area is display */
-	workarea[0] = 0;
-	workarea[1] = 0;
-	workarea[2] = display_width;
-	workarea[3] = display_height;
-}
-
-/* Find root window and desktop window.
- * Return desktop window on success,
- * and set root and desktop byref return values.
- * Return 0 on failure. */
-static Window find_desktop_window(Window *p_root, Window *p_desktop)
-{
-	Atom type;
-	int format, i;
-	unsigned long nitems, bytes;
-	unsigned int n;
-	Window root = RootWindow(display, screen);
-	Window win = root;
-	Window troot, parent, *children;
-	unsigned char *buf = NULL;
-
-	if (!p_root || !p_desktop) {
-		return 0;
-	}
-
-	/* some window managers set __SWM_VROOT to some child of root window */
-
-	XQueryTree(display, root, &troot, &parent, &children, &n);
-	for (i = 0; i < (int) n; i++) {
-		if (XGetWindowProperty(display, children[i], ATOM(__SWM_VROOT), 0, 1,
-					False, XA_WINDOW, &type, &format, &nitems, &bytes, &buf)
-				== Success && type == XA_WINDOW) {
-			win = *(Window *) buf;
-			XFree(buf);
-			XFree(children);
-			fprintf(stderr,
-					PACKAGE_NAME": desktop window (%lx) found from __SWM_VROOT property\n",
-					win);
-			fflush(stderr);
-			*p_root = win;
-			*p_desktop = win;
-			return win;
-		}
-
-		if (buf) {
-			XFree(buf);
-			buf = 0;
-		}
-	}
-	XFree(children);
-
-	/* get subwindows from root */
-	win = find_subwindow(root, -1, -1);
-
-	update_workarea();
-
-	win = find_subwindow(win, workarea[2], workarea[3]);
-
-	if (buf) {
-		XFree(buf);
-		buf = 0;
-	}
-
-	if (win != root) {
-		fprintf(stderr,
-				PACKAGE_NAME": desktop window (%lx) is subwindow of root window (%lx)\n",
-				win, root);
-	} else {
-		fprintf(stderr, PACKAGE_NAME": desktop window (%lx) is root window\n", win);
-	}
-
-	fflush(stderr);
-
-	*p_root = root;
-	*p_desktop = win;
-
-	return win;
 }
 
 #ifdef OWN_WINDOW
@@ -557,13 +577,8 @@ void destroy_window(void)
 	memset(&window, 0, sizeof(struct conky_window));
 }
 
-static void init_window(bool own)
+static void  __attribute__((unused)) init_window(bool)
 {
-	// own is unused if OWN_WINDOW is not defined
-	(void) own;
-
-	window_created = 1;
-
 #ifdef OWN_WINDOW
 	if (own) {
 		int depth = 0, flags;
@@ -827,23 +842,6 @@ static void init_window(bool own)
 		XMapWindow(display, window.window);
 
 	} else
-#endif /* OWN_WINDOW */
-	{
-		XWindowAttributes attrs;
-
-		if (!window.window) {
-			window.window = find_desktop_window(&window.root, &window.desktop);
-		}
-		window.visual = DefaultVisual(display, screen);
-		window.colourmap = DefaultColormap(display, screen);
-
-		if (XGetWindowAttributes(display, window.window, &attrs)) {
-			window.width = attrs.width;
-			window.height = attrs.height;
-		}
-
-		fprintf(stderr, PACKAGE_NAME": drawing to desktop window\n");
-	}
 
 	/* Drawable is same as window. This may be changed by double buffering. */
 	window.drawable = window.window;
@@ -856,43 +854,10 @@ static void init_window(bool own)
 					ButtonPressMask | ButtonReleaseMask) : 0)
 #endif
 			);
+#endif /* OWN_WINDOW */
 }
 
-static Window find_subwindow(Window win, int w, int h)
-{
-	unsigned int i, j;
-	Window troot, parent, *children;
-	unsigned int n;
-
-	/* search subwindows with same size as display or work area */
-
-	for (i = 0; i < 10; i++) {
-		XQueryTree(display, win, &troot, &parent, &children, &n);
-
-		for (j = 0; j < n; j++) {
-			XWindowAttributes attrs;
-
-			if (XGetWindowAttributes(display, children[j], &attrs)) {
-				/* Window must be mapped and same size as display or
-				 * work space */
-				if (attrs.map_state != 0 && ((attrs.width == display_width
-								&& attrs.height == display_height)
-							|| (attrs.width == w && attrs.height == h))) {
-					win = children[j];
-					break;
-				}
-			}
-		}
-
-		XFree(children);
-		if (j == n) {
-			break;
-		}
-	}
-
-	return win;
-}
-
+#if 0
 void create_gc(void)
 {
 	XGCValues values;
@@ -902,6 +867,7 @@ void create_gc(void)
 	window.gc = XCreateGC(display, window.drawable,
 			GCFunction | GCGraphicsExposures, &values);
 }
+#endif
 
 //Get current desktop number
 static inline void get_x11_desktop_current(Display *current_display, Window root, Atom atom)
@@ -1178,7 +1144,7 @@ void xpmdb_swap_buffers(void)
 	if (*use_xpmdb) {
 		XCopyArea(display, window.back_buffer, window.window, window.gc, 0, 0, window.width, window.height, 0, 0);
 		XSetForeground(display, window.gc, 0);
-		XFillRectangle(display, window.drawable, window.gc, 0, 0, window.width, window.height);
+// XXX		XFillRectangle(display, window.drawable, window.gc, 0, 0, window.width, window.height);
 		XFlush(display);
 	}
 }

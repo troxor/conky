@@ -3030,7 +3030,7 @@ int main(int argc, char **argv)
 				std::cout << defconfig;
 				return 0;
 #endif
-#ifdef BUILD_X11
+#if 0 // XXX has this ever worked?
 			case 'w':
 				window.window = strtol(optarg, 0, 0);
 				break;

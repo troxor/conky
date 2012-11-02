@@ -67,10 +67,7 @@ enum window_hints {
 #endif
 
 struct conky_window {
-	Window root, window, desktop;
-	Drawable drawable;
-	Visual *visual;
-	Colormap colourmap;
+	Window root, window /*XXX*/, desktop;
 	GC gc;
 
 #ifdef BUILD_XDBE
@@ -82,8 +79,7 @@ struct conky_window {
 	XftDraw *xftdraw;
 #endif
 
-	int width;
-	int height;
+	int width, height; // XXX
 #ifdef OWN_WINDOW
 	int x;
 	int y;
@@ -141,7 +137,16 @@ namespace conky {
 		int display_width;
 		int display_height;
 		int screen;
+		Window window;
+		Window root;
+		Window desktop;
+		Visual *visual;
+		Colormap colourmap;
+		point size;
+		Drawable drawable;
 
+		Window find_subwindow(Window win);
+		void find_root_and_desktop_window();
 	protected:
 		virtual void work();
 
@@ -153,6 +158,9 @@ namespace conky {
 		virtual point get_text_size(const std::u32string &text) const;
 		virtual void draw_text(const std::string &text, const point &p, const point &size);
 		virtual void draw_text(const std::u32string &text, const point &p, const point &size);
+
+		void use_root_window();
+		void use_own_window();
 	};
 
 	namespace priv {
@@ -175,20 +183,20 @@ namespace conky {
 			{ return om; }
 		};
 
+		class own_window_setting: public simple_config_setting<bool> {
+			typedef simple_config_setting<bool> Base;
+
+		public:
+			const bool set(const bool &r, bool init);
+			own_window_setting()
+				: Base("own_window", false, false)
+			{}
+		};
+
 	} /* namespace conky::priv */
 } /* namespace conky */
 
 namespace priv {
-	class own_window_setting: public conky::simple_config_setting<bool> {
-		typedef conky::simple_config_setting<bool> Base;
-	
-	public:
-		const bool set(const bool &r, bool init);
-		own_window_setting()
-			: Base("own_window", false, false)
-		{}
-	};
-
 	class use_xdbe_setting: public conky::simple_config_setting<bool> {
 		typedef conky::simple_config_setting<bool> Base;
 	
@@ -266,7 +274,7 @@ extern conky::simple_config_setting<bool>        use_argb_visual;
 extern conky::range_config_setting<int>          own_window_argb_value;
 #endif
 #endif /*OWN_WINDOW*/
-extern priv::own_window_setting					 own_window;
+extern conky::priv::own_window_setting			 own_window;
 
 #ifdef BUILD_XDBE
 extern priv::use_xdbe_setting					 use_xdbe;
