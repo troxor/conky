@@ -75,6 +75,18 @@ namespace conky {
 			return value = r;
 		}
 
+		const bool use_argb_visual_setting::set(const bool &r, bool init)
+		{
+			assert(init);
+
+			if(*out_to_x)
+				value = out_to_x.get_om()->set_visual(r);
+			else
+				value = false;
+
+			return value;
+		}
+
 		const bool own_window_setting::set(const bool &r, bool init)
 		{
 			assert(init);
@@ -193,7 +205,6 @@ conky::lua_traits<alignment>::Map conky::lua_traits<alignment>::map = {
 	{ "none",          NONE }
 };
 
-#ifdef OWN_WINDOW
 template<>
 conky::lua_traits<window_type>::Map conky::lua_traits<window_type>::map = {
 	{ "normal",   TYPE_NORMAL },
@@ -213,6 +224,7 @@ conky::lua_traits<window_hints>::Map conky::lua_traits<window_hints>::map = {
 	{ "skip_pager",   HINT_SKIP_PAGER }
 };
 
+#ifdef OWN_WINDOW
 uint16_t
 window_hints_traits::from_lua(lua::state &l, int index, const std::string &description)
 {
@@ -283,7 +295,6 @@ conky::range_config_setting<int>          border_width("border_width", 0,
 conky::simple_config_setting<bool>        use_xft("use_xft", false, false);
 #endif
 
-#ifdef OWN_WINDOW
 conky::simple_config_setting<bool>        set_transparent("own_window_transparent", false, false);
 conky::simple_config_setting<std::string> own_window_class("own_window_class",
 															PACKAGE_NAME, false);
@@ -292,17 +303,16 @@ conky::simple_config_setting<std::string> own_window_title("own_window_title",
 										PACKAGE_NAME " (" + gethostnamecxx()+")", false);
 
 conky::simple_config_setting<window_type> own_window_type("own_window_type", TYPE_NORMAL, false);
-conky::simple_config_setting<uint16_t, window_hints_traits>
-									      own_window_hints("own_window_hints", 0, false);
+//conky::simple_config_setting<uint16_t, window_hints_traits>
+//									      own_window_hints("own_window_hints", 0, false);
 
 priv::colour_setting                      background_colour("own_window_colour", 0);
 
+conky::priv::use_argb_visual_setting      use_argb_visual;
 #ifdef BUILD_ARGB
-conky::simple_config_setting<bool>        use_argb_visual("own_window_argb_visual", false, false);
 conky::range_config_setting<int>          own_window_argb_value("own_window_argb_value",
 																0, 255, 255, false);
 #endif
-#endif /*OWN_WINDOW*/
 conky::priv::own_window_setting			  own_window;
 
 #ifdef BUILD_XDBE
@@ -348,7 +358,8 @@ static int __attribute__((noreturn)) x11_ioerror_handler(Display *d)
 
 namespace conky {
 	x11_output::x11_output(uint32_t period, const std::string &display_)
-		: output_method(period, false)
+		: output_method(period, false), display(NULL), screen(0), window(0), root(0),
+		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0)
 	{
 		// passing NULL to XOpenDisplay should open the default display
 		const char *disp = display_.size() ? display_.c_str() : NULL;
@@ -357,8 +368,8 @@ namespace conky {
 		}
 
 		screen = DefaultScreen(display);
-		display_width = DisplayWidth(display, screen);
-		display_height = DisplayHeight(display, screen);
+		display_size = { DisplayWidth(display, screen), DisplayHeight(display, screen) };
+		find_root_and_desktop_window();
 
 #ifdef DEBUG
 		_Xdebug = 1;
@@ -372,13 +383,10 @@ namespace conky {
 	{
 		XWindowAttributes attrs;
 
-		find_root_and_desktop_window();
 		window = desktop;
-		visual = DefaultVisual(display, screen);
-		colourmap = DefaultColormap(display, screen);
 
 		if (XGetWindowAttributes(display, window, &attrs)) {
-			size = { attrs.width, attrs.height };
+			window_size = { attrs.width, attrs.height };
 		}
 
 		fprintf(stderr, PACKAGE_NAME": drawing to desktop window\n");
@@ -391,218 +399,14 @@ namespace conky {
 		XSelectInput(display, window, ExposureMask | PropertyChangeMask);
 	}
 
-	void x11_output::use_own_window() { }
-
-	/* Find root window and desktop window.
-	 * Return desktop window on success,
-	 * and set root and desktop byref return values.
-	 * Return 0 on failure. */
-	void x11_output::find_root_and_desktop_window()
-	{
-		Atom type;
-		int format;
-		unsigned long nitems, bytes;
-		unsigned int n;
-
-		root = RootWindow(display, screen);
-		Window win = root;
-		Window troot, parent, *children;
-		unsigned char *buf = NULL;
-
-		/* some window managers set __SWM_VROOT to some child of root window */
-		XQueryTree(display, root, &troot, &parent, &children, &n);
-		for(unsigned int i = 0; i < n; i++) {
-			if (XGetWindowProperty(display, children[i], ATOM(__SWM_VROOT), 0, 1,
-						False, XA_WINDOW, &type, &format, &nitems, &bytes, &buf)
-					== Success && type == XA_WINDOW) {
-
-				win = *(Window *) buf;
-
-				XFree(buf);
-				XFree(children);
-
-				fprintf(stderr,
-						PACKAGE_NAME": desktop window (%lx) found from __SWM_VROOT property\n",
-						win);
-
-				root = win;
-				desktop = win;
-				return;
-			}
-
-			if (buf) {
-				XFree(buf);
-				buf = 0;
-			}
-		}
-		XFree(children);
-
-		/* get subwindows from root */
-		desktop = find_subwindow(root);
-
-		if (win != root) {
-			fprintf(stderr,
-					PACKAGE_NAME": desktop window (%lx) is subwindow of root window (%lx)\n",
-					win, root);
-		} else {
-			fprintf(stderr, PACKAGE_NAME": desktop window (%lx) is root window\n", win);
-		}
-	}
-
-	Window x11_output::find_subwindow(Window win)
-	{
-		unsigned int i, j;
-		Window troot, parent, *children;
-		unsigned int n;
-
-		/* search subwindows with same size as display or work area */
-
-		for (i = 0; i < 10; i++) {
-			XQueryTree(display, win, &troot, &parent, &children, &n);
-
-			for (j = n; j > 0; --j) {
-				XWindowAttributes attrs;
-
-				if (XGetWindowAttributes(display, children[j-1], &attrs)) {
-					/* Window must be mapped and same size as display or
-					 * work space */
-					if (attrs.map_state != 0
-							&& attrs.width == display_width && attrs.height == display_height) {
-						win = children[j-1];
-						break;
-					}
-				}
-			}
-
-			XFree(children);
-			if (j == 0) {
-				break;
-			}
-		}
-
-		return win;
-	}
-
-	void x11_output::work() {}
-	point x11_output::get_text_size(const std::u32string &) const
-	{ return { 0, 0 }; }
-	point x11_output::get_text_size(const std::string &) const
-	{ return { 0, 0 }; }
-	void x11_output::draw_text(const std::string &, const point &, const point &) {}
-	void x11_output::draw_text(const std::u32string &, const point &, const point &) {}
-}
-
-#ifdef OWN_WINDOW
-namespace {
-	/* helper function for set_transparent_background() */
-	void do_set_background(Window win, int argb)
-	{
-		unsigned long colour = *background_colour | (argb<<24);
-		XSetWindowBackground(display, win, colour);
-	}
-}
-
-/* if no argb visual is configured sets background to ParentRelative for the Window and all parents,
-   else real transparency is used */
-void set_transparent_background(Window win)
-{
-#ifdef BUILD_ARGB
-	if (have_argb_visual) {
-		// real transparency
-		do_set_background(win, *set_transparent ? 0 : *own_window_argb_value);
-	} else {
-#endif /* BUILD_ARGB */
-	// pseudo transparency
-	
-	if (*set_transparent) {
-		Window parent = win;
-		unsigned int i;
-
-		for (i = 0; i < 50 && parent != RootWindow(display, screen); i++) {
-			Window r, *children;
-			unsigned int n;
-
-			XSetWindowBackgroundPixmap(display, parent, ParentRelative);
-
-			XQueryTree(display, parent, &r, &parent, &children, &n);
-			XFree(children);
-		}
-	} else
-		do_set_background(win, 0);
-#ifdef BUILD_ARGB
-	}
-#endif /* BUILD_ARGB */
-}
-#endif
-
-#ifdef BUILD_ARGB
-static int get_argb_visual(Visual** visual, int *depth) {
-	/* code from gtk project, gdk_screen_get_rgba_visual */
-	XVisualInfo visual_template;
-	XVisualInfo *visual_list;
-	int nxvisuals = 0, i;
-	
-	visual_template.screen = screen;
-	visual_list = XGetVisualInfo (display, VisualScreenMask,
-				&visual_template, &nxvisuals);
-	for (i = 0; i < nxvisuals; i++) {
-		if (visual_list[i].depth == 32 &&
-			 (visual_list[i].red_mask   == 0xff0000 &&
-			  visual_list[i].green_mask == 0x00ff00 &&
-			  visual_list[i].blue_mask  == 0x0000ff)) {
-			*visual = visual_list[i].visual;
-			*depth = visual_list[i].depth;
-			DBGP("Found ARGB Visual");
-			XFree(visual_list);
-			return 1;
-		}
-	}
-	// no argb visual available
-	DBGP("No ARGB Visual found");
-	XFree(visual_list);
-	return 0;
-}
-#endif /* BUILD_ARGB */
-
-void destroy_window(void)
-{
-#ifdef BUILD_XFT
-	if(window.xftdraw) {
-		XftDrawDestroy(window.xftdraw);
-	}
-#endif /* BUILD_XFT */
-	if(window.gc) {
-		XFreeGC(display, window.gc);
-	}
-	memset(&window, 0, sizeof(struct conky_window));
-}
-
-static void  __attribute__((unused)) init_window(bool)
-{
-#ifdef OWN_WINDOW
-	if (own) {
+	void x11_output::use_own_window() {
+#if 0
 		int depth = 0, flags;
 		Visual *visual = NULL;
-		
-		if (!find_desktop_window(&window.root, &window.desktop)) {
-			return;
-		}
-		
-#ifdef BUILD_ARGB
+
 		if (*use_argb_visual && get_argb_visual(&visual, &depth)) {
-			have_argb_visual = true;
-			window.visual = visual;
-			window.colourmap = XCreateColormap(display,
-				DefaultRootWindow(display), window.visual, AllocNone);
 		} else {
-#endif /* BUILD_ARGB */
-			window.visual = DefaultVisual(display, screen);
-			window.colourmap = DefaultColormap(display, screen);
-			depth = CopyFromParent;
-			visual = CopyFromParent;
-#ifdef BUILD_ARGB
 		}
-#endif /* BUILD_ARGB */
 
 		int b = *border_inner_margin + *border_width
 			+ *border_outer_margin;
@@ -645,7 +449,7 @@ static void  __attribute__((unused)) init_window(bool)
 			XClassHint classHint;
 			XWMHints wmHint;
 			Atom xa;
-			
+
 #ifdef BUILD_ARGB
 			if (have_argb_visual) {
 				attrs.colormap = window.colourmap;
@@ -841,19 +645,216 @@ static void  __attribute__((unused)) init_window(bool)
 
 		XMapWindow(display, window.window);
 
-	} else
 
-	/* Drawable is same as window. This may be changed by double buffering. */
-	window.drawable = window.window;
+		/* Drawable is same as window. This may be changed by double buffering. */
+		window.drawable = window.window;
 
-	XFlush(display);
+		XFlush(display);
 
-	XSelectInput(display, window.window, ExposureMask | PropertyChangeMask
-#ifdef OWN_WINDOW
-			| (*own_window ? (StructureNotifyMask |
-					ButtonPressMask | ButtonReleaseMask) : 0)
+		XSelectInput(display, window.window, ExposureMask | PropertyChangeMask
+				| (*own_window ? (StructureNotifyMask |
+						ButtonPressMask | ButtonReleaseMask) : 0)
+				);
 #endif
-			);
+	}
+
+	/* Find root window and desktop window.
+	 * Return desktop window on success,
+	 * and set root and desktop byref return values.
+	 * Return 0 on failure. */
+	void x11_output::find_root_and_desktop_window()
+	{
+		Atom type;
+		int format;
+		unsigned long nitems, bytes;
+		unsigned int n;
+
+		root = RootWindow(display, screen);
+		Window win = root;
+		Window troot, parent, *children;
+		unsigned char *buf = NULL;
+
+		/* some window managers set __SWM_VROOT to some child of root window */
+		XQueryTree(display, root, &troot, &parent, &children, &n);
+		for(unsigned int i = 0; i < n; i++) {
+			if (XGetWindowProperty(display, children[i], ATOM(__SWM_VROOT), 0, 1,
+						False, XA_WINDOW, &type, &format, &nitems, &bytes, &buf)
+					== Success && type == XA_WINDOW) {
+
+				win = *(Window *) buf;
+
+				XFree(buf);
+				XFree(children);
+
+				fprintf(stderr,
+						PACKAGE_NAME": desktop window (%lx) found from __SWM_VROOT property\n",
+						win);
+
+				root = win;
+				desktop = win;
+				return;
+			}
+
+			if (buf) {
+				XFree(buf);
+				buf = 0;
+			}
+		}
+		XFree(children);
+
+		/* get subwindows from root */
+		desktop = find_subwindow(root);
+
+		if (win != root) {
+			fprintf(stderr,
+					PACKAGE_NAME": desktop window (%lx) is subwindow of root window (%lx)\n",
+					win, root);
+		} else {
+			fprintf(stderr, PACKAGE_NAME": desktop window (%lx) is root window\n", win);
+		}
+	}
+
+	Window x11_output::find_subwindow(Window win)
+	{
+		unsigned int i, j;
+		Window troot, parent, *children;
+		unsigned int n;
+
+		/* search subwindows with same size as display or work area */
+
+		for (i = 0; i < 10; i++) {
+			XQueryTree(display, win, &troot, &parent, &children, &n);
+
+			for (j = n; j > 0; --j) {
+				XWindowAttributes attrs;
+
+				if (XGetWindowAttributes(display, children[j-1], &attrs)) {
+					/* Window must be mapped and same size as display or
+					 * work space */
+					if (attrs.map_state != 0
+							&& attrs.width == display_width && attrs.height == display_height) {
+						win = children[j-1];
+						break;
+					}
+				}
+			}
+
+			XFree(children);
+			if (j == 0) {
+				break;
+			}
+		}
+
+		return win;
+	}
+
+	bool x11_output::set_visual(bool argb) {
+		if(argb) {
+			/* code from gtk project, gdk_screen_get_rgba_visual */
+			XVisualInfo visual_template;
+			XVisualInfo *visual_list;
+			int nxvisuals = 0, i;
+
+			visual_template.screen = screen;
+			visual_list = XGetVisualInfo (display, VisualScreenMask,
+					&visual_template, &nxvisuals);
+			for (i = 0; i < nxvisuals; i++) {
+				if (visual_list[i].depth == 32 &&
+						(visual_list[i].red_mask   == 0xff0000 &&
+						 visual_list[i].green_mask == 0x00ff00 &&
+						 visual_list[i].blue_mask  == 0x0000ff)) {
+
+					visual = visual_list[i].visual;
+					depth = visual_list[i].depth;
+					fprintf(stderr, PACKAGE_NAME ": Found ARGB visual.\n");
+					XFree(visual_list);
+
+					colourmap = XCreateColormap(display,
+							DefaultRootWindow(display), visual, AllocNone);
+					return true;
+				}
+			}
+			// no argb visual available
+			fprintf(stderr, PACKAGE_NAME ": No ARGB visual found.\n");
+			XFree(visual_list);
+		}
+
+		visual = DefaultVisual(display, screen);
+		colourmap = DefaultColormap(display, screen);
+		depth = CopyFromParent;
+		visual = CopyFromParent;
+		return false;
+	}
+
+	void x11_output::work() {}
+	point x11_output::get_text_size(const std::u32string &) const
+	{ return { 0, 0 }; }
+	point x11_output::get_text_size(const std::string &) const
+	{ return { 0, 0 }; }
+	void x11_output::draw_text(const std::string &, const point &, const point &) {}
+	void x11_output::draw_text(const std::u32string &, const point &, const point &) {}
+}
+
+#ifdef OWN_WINDOW
+namespace {
+	/* helper function for set_transparent_background() */
+	void do_set_background(Window win, int argb)
+	{
+		unsigned long colour = *background_colour | (argb<<24);
+		XSetWindowBackground(display, win, colour);
+	}
+}
+
+/* if no argb visual is configured sets background to ParentRelative for the Window and all parents,
+   else real transparency is used */
+void set_transparent_background(Window win)
+{
+#ifdef BUILD_ARGB
+	if (have_argb_visual) {
+		// real transparency
+		do_set_background(win, *set_transparent ? 0 : *own_window_argb_value);
+	} else {
+#endif /* BUILD_ARGB */
+	// pseudo transparency
+	
+	if (*set_transparent) {
+		Window parent = win;
+		unsigned int i;
+
+		for (i = 0; i < 50 && parent != RootWindow(display, screen); i++) {
+			Window r, *children;
+			unsigned int n;
+
+			XSetWindowBackgroundPixmap(display, parent, ParentRelative);
+
+			XQueryTree(display, parent, &r, &parent, &children, &n);
+			XFree(children);
+		}
+	} else
+		do_set_background(win, 0);
+#ifdef BUILD_ARGB
+	}
+#endif /* BUILD_ARGB */
+}
+#endif
+
+void destroy_window(void)
+{
+#ifdef BUILD_XFT
+	if(window.xftdraw) {
+		XftDrawDestroy(window.xftdraw);
+	}
+#endif /* BUILD_XFT */
+	if(window.gc) {
+		XFreeGC(display, window.gc);
+	}
+	memset(&window, 0, sizeof(struct conky_window));
+}
+
+static void  __attribute__((unused)) init_window(bool)
+{
+#ifdef OWN_WINDOW
+	if (own) {
 #endif /* OWN_WINDOW */
 }
 

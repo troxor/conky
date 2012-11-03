@@ -44,7 +44,6 @@
 
 #define ATOM(a) XInternAtom(display, #a, False)
 
-#ifdef OWN_WINDOW
 enum window_type {
 	TYPE_NORMAL = 0,
 	TYPE_DOCK,
@@ -62,6 +61,7 @@ enum window_hints {
 	HINT_SKIP_PAGER
 };
 
+#ifdef OWN_WINDOW
 #define SET_HINT(mask, hint)	(mask |= (1 << (hint)))
 #define TEST_HINT(mask, hint)	(mask & (1 << (hint)))
 #endif
@@ -85,13 +85,6 @@ struct conky_window {
 	int y;
 #endif
 };
-
-#if defined(BUILD_ARGB) && defined(OWN_WINDOW)
-/* true if use_argb_visual=true and argb visual was found*/
-extern bool have_argb_visual;
-#endif
-
-extern int workarea[4];
 
 extern struct conky_window window;
 extern char window_created;
@@ -134,15 +127,15 @@ namespace conky {
 
 	class x11_output: public output_method {
 		Display *display;
-		int display_width;
-		int display_height;
+		point display_size;
 		int screen;
 		Window window;
 		Window root;
 		Window desktop;
 		Visual *visual;
+		int depth;
 		Colormap colourmap;
-		point size;
+		point window_size;
 		Drawable drawable;
 
 		Window find_subwindow(Window win);
@@ -159,6 +152,7 @@ namespace conky {
 		virtual void draw_text(const std::string &text, const point &p, const point &size);
 		virtual void draw_text(const std::u32string &text, const point &p, const point &size);
 
+		bool set_visual(bool argb);
 		void use_root_window();
 		void use_own_window();
 	};
@@ -181,6 +175,16 @@ namespace conky {
 
 			const thread_handle<x11_output>& get_om()
 			{ return om; }
+		};
+
+		class use_argb_visual_setting: public simple_config_setting<bool> {
+			typedef simple_config_setting<bool> Base;
+
+		public:
+			const bool set(const bool &r, bool init);
+			use_argb_visual_setting()
+				: Base("own_window_argb_visual", false, false)
+			{}
 		};
 
 		class own_window_setting: public simple_config_setting<bool> {
@@ -256,7 +260,6 @@ extern conky::range_config_setting<int>          border_width;
 extern conky::simple_config_setting<bool>        use_xft;
 #endif
 
-#ifdef OWN_WINDOW
 extern conky::simple_config_setting<bool>        set_transparent;
 extern conky::simple_config_setting<std::string> own_window_class;
 extern conky::simple_config_setting<std::string> own_window_title;
@@ -267,13 +270,12 @@ struct window_hints_traits {
 };
 extern conky::simple_config_setting<uint16_t, window_hints_traits> own_window_hints;
 
+extern conky::priv::use_argb_visual_setting      use_argb_visual;
 #ifdef BUILD_ARGB
-extern conky::simple_config_setting<bool>        use_argb_visual;
 
 /* range of 0-255 for alpha */
 extern conky::range_config_setting<int>          own_window_argb_value;
 #endif
-#endif /*OWN_WINDOW*/
 extern conky::priv::own_window_setting			 own_window;
 
 #ifdef BUILD_XDBE
