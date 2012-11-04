@@ -211,10 +211,6 @@ namespace conky {
 		}
 	};
 
-	template<typename T, typename Traits = lua_traits<T>>
-	T from_lua(lua::state &l, int index, const std::string &description)
-	{ return Traits::from_lua(l, index, description); }
-
 	namespace priv {
 		class config_setting_base {
 		private:

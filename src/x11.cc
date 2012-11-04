@@ -101,6 +101,43 @@ namespace conky {
 
 			return value;
 		}
+
+		uint16_t
+		window_hints_traits::from_lua(lua::state &l, int index, const std::string &description)
+		{
+			lua::stack_sentry s(l);
+			l.checkstack(1);
+
+			std::string hints = l.tostring(index);
+			// add a sentinel to simplify the following loop
+			hints += ',';
+			size_t pos = 0;
+			size_t newpos;
+			uint16_t ret = 0;
+			while((newpos = hints.find_first_of(", ", pos)) != std::string::npos) {
+				if(newpos > pos) {
+					l.pushstring(hints.substr(pos, newpos-pos)); {
+						ret |= Traits::from_lua(l, -1, description);
+					} l.pop();
+				}
+				pos = newpos+1;
+			}
+			return ret;
+		}
+
+		void window_hints_traits::to_lua(lua::state &l, uint16_t t, const std::string &)
+		{
+			std::string ret;
+			for(auto i = Traits::map.begin(); i != Traits::map.end(); ++i) {
+				if(i->second & t) {
+					if(not ret.empty())
+						ret += ", ";
+					ret += i->first;
+				}
+			}
+			l.pushstring(ret);
+		}
+
 	} /* namespace conky::priv */
 } /* namespace conky */
 
@@ -224,34 +261,6 @@ conky::lua_traits<window_hints>::Map conky::lua_traits<window_hints>::map = {
 	{ "skip_pager",   HINT_SKIP_PAGER }
 };
 
-#ifdef OWN_WINDOW
-uint16_t
-window_hints_traits::from_lua(lua::state &l, int index, const std::string &description)
-{
-	typedef conky::lua_traits<window_hints> Traits;
-
-	lua::stack_sentry s(l);
-	l.checkstack(1);
-
-	std::string hints = l.tostring(index);
-	// add a sentinel to simplify the following loop
-	hints += ',';
-	size_t pos = 0;
-	size_t newpos;
-	uint16_t ret = 0;
-	while((newpos = hints.find_first_of(", ", pos)) != std::string::npos) {
-		if(newpos > pos) {
-			l.pushstring(hints.substr(pos, newpos-pos));
-			window_hints t = conky::from_lua<window_hints>(l, -1, description);
-			SET_HINT(ret, t);
-			l.pop();
-		}
-		pos = newpos+1;
-	}
-	return ret;
-}
-#endif
-
 namespace {
 	// used to set the default value for own_window_title
 	std::string gethostnamecxx()
@@ -303,8 +312,8 @@ conky::simple_config_setting<std::string> own_window_title("own_window_title",
 										PACKAGE_NAME " (" + gethostnamecxx()+")", false);
 
 conky::simple_config_setting<window_type> own_window_type("own_window_type", TYPE_NORMAL, false);
-//conky::simple_config_setting<uint16_t, window_hints_traits>
-//									      own_window_hints("own_window_hints", 0, false);
+conky::simple_config_setting<uint16_t, conky::priv::window_hints_traits>
+									      own_window_hints("own_window_hints", 0, false);
 
 priv::colour_setting                      background_colour("own_window_colour", 0);
 

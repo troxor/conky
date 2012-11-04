@@ -67,7 +67,7 @@ namespace conky {
 				if(not l.isstring(-1))
 					NORM_ERR("table_layout: Alignment of column %zd invalid, using defaults...", colno);
 				else
-					t.align = conky::from_lua<table_layout::alignment>(l, -1, 
+					t.align = lua_traits<table_layout::alignment>::from_lua(l, -1,
 							strprintf("table_layout alignment of column %zd", colno));
 			}
 			catch(conky::conversion_error &e) {

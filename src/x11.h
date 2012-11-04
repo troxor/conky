@@ -53,18 +53,13 @@ enum window_type {
 };
 
 enum window_hints {
-	HINT_UNDECORATED = 0,
-	HINT_BELOW,
-	HINT_ABOVE,
-	HINT_STICKY,
-	HINT_SKIP_TASKBAR,
-	HINT_SKIP_PAGER
+	HINT_UNDECORATED = 1,
+	HINT_BELOW = HINT_UNDECORATED << 1,
+	HINT_ABOVE = HINT_BELOW << 1,
+	HINT_STICKY = HINT_ABOVE << 1,
+	HINT_SKIP_TASKBAR = HINT_STICKY << 1,
+	HINT_SKIP_PAGER = HINT_SKIP_TASKBAR << 1
 };
-
-#ifdef OWN_WINDOW
-#define SET_HINT(mask, hint)	(mask |= (1 << (hint)))
-#define TEST_HINT(mask, hint)	(mask & (1 << (hint)))
-#endif
 
 struct conky_window {
 	Window root, window /*XXX*/, desktop;
@@ -197,6 +192,12 @@ namespace conky {
 			{}
 		};
 
+		struct window_hints_traits {
+			typedef lua_traits<window_hints> Traits;
+
+			static uint16_t from_lua(lua::state &l, int index, const std::string &description);
+			static void to_lua(lua::state &l, uint16_t t, const std::string &description);
+		};
 	} /* namespace conky::priv */
 } /* namespace conky */
 
@@ -265,10 +266,7 @@ extern conky::simple_config_setting<std::string> own_window_class;
 extern conky::simple_config_setting<std::string> own_window_title;
 extern conky::simple_config_setting<window_type> own_window_type;
 
-struct window_hints_traits {
-	static uint16_t from_lua(lua::state &l, int index, const std::string &description);
-};
-extern conky::simple_config_setting<uint16_t, window_hints_traits> own_window_hints;
+extern conky::simple_config_setting<uint16_t, conky::priv::window_hints_traits> own_window_hints;
 
 extern conky::priv::use_argb_visual_setting      use_argb_visual;
 #ifdef BUILD_ARGB
