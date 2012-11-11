@@ -135,12 +135,18 @@ namespace conky {
 
 		Window find_subwindow(Window win);
 		void find_root_and_desktop_window();
+		void create_window(bool override);
 	protected:
 		virtual void work();
 
 	public:
 		x11_output(uint32_t period, const std::string &display_);
-		~x11_output() { XCloseDisplay(display); }
+		~x11_output()
+		{
+			if(window != 0)
+				XDestroyWindow(display, window);
+			XCloseDisplay(display);
+		}
 
 		virtual point get_text_size(const std::string &text) const;
 		virtual point get_text_size(const std::u32string &text) const;

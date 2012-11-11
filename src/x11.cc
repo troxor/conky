@@ -392,91 +392,54 @@ namespace conky {
 	{
 		XWindowAttributes attrs;
 
-		window = desktop;
-
-		if (XGetWindowAttributes(display, window, &attrs)) {
+		if (XGetWindowAttributes(display, desktop, &attrs)) {
 			window_size = { attrs.width, attrs.height };
 		}
 
 		fprintf(stderr, PACKAGE_NAME": drawing to desktop window\n");
-
-		/* Drawable is same as window. This may be changed by double buffering. */
-		drawable = window;
+		drawable = desktop;
 
 		XFlush(display);
 
-		XSelectInput(display, window, ExposureMask | PropertyChangeMask);
+		XSelectInput(display, desktop, ExposureMask | PropertyChangeMask);
 	}
 
-	void x11_output::use_own_window() {
-#if 0
-		int depth = 0, flags;
-		Visual *visual = NULL;
+	void x11_output::create_window(bool override) {
+		XSetWindowAttributes attrs = { ParentRelative, 0L, 0, 0L, 0, 0,
+			Always, 0L, 0L, False, StructureNotifyMask | ExposureMask, 0L,
+			override, colourmap, 0 };
+		if(not override)
+			attrs.event_mask |= ButtonPressMask | ButtonReleaseMask;
 
-		if (*use_argb_visual && get_argb_visual(&visual, &depth)) {
-		} else {
-		}
-
+		unsigned long flags = CWBorderPixel | CWColormap | CWOverrideRedirect | CWBackPixel;
 		int b = *border_inner_margin + *border_width
 			+ *border_outer_margin;
 
+		window = XCreateWindow(display, override ? desktop : root, 0, 0, b, b, 0, depth,
+				InputOutput, visual, flags, &attrs);
+
+		XLowerWindow(display, window);
+	}
+
+	void x11_output::use_own_window() {
 		if (*own_window_type == TYPE_OVERRIDE) {
 
 			/* An override_redirect True window.
 			 * No WM hints or button processing needed. */
-			XSetWindowAttributes attrs = { ParentRelative, 0L, 0, 0L, 0, 0,
-				Always, 0L, 0L, False, StructureNotifyMask | ExposureMask, 0L,
-				True, 0, 0 };
-#ifdef BUILD_ARGB
-			if (have_argb_visual) {
-				attrs.colormap = window.colourmap;
-				flags = CWBorderPixel | CWColormap | CWOverrideRedirect;
-			} else {
-#endif /* BUILD_ARGB */
-				flags = CWBackPixel | CWOverrideRedirect;
-#ifdef BUILD_ARGB
-			}
-#endif /* BUILD_ARGB */
 
-			/* Parent is desktop window (which might be a child of root) */
-			window.window = XCreateWindow(display, window.desktop, window.x,
-					window.y, b, b, 0, depth, InputOutput, visual,
-					flags, &attrs);
-
-			XLowerWindow(display, window.window);
+			create_window(true);
 
 			fprintf(stderr, PACKAGE_NAME": window type - override\n");
-			fflush(stderr);
 		} else { /* *own_window_type != TYPE_OVERRIDE */
 
 			/* A window managed by the window manager.
 			 * Process hints and buttons. */
-			XSetWindowAttributes attrs = { ParentRelative, 0L, 0, 0L, 0, 0,
-				Always, 0L, 0L, False, StructureNotifyMask | ExposureMask |
-					ButtonPressMask | ButtonReleaseMask, 0L, False, 0, 0 };
 
 			XClassHint classHint;
 			XWMHints wmHint;
 			Atom xa;
 
-#ifdef BUILD_ARGB
-			if (have_argb_visual) {
-				attrs.colormap = window.colourmap;
-				flags = CWBorderPixel | CWColormap | CWOverrideRedirect;
-			} else {
-#endif /* BUILD_ARGB */
-				flags = CWBackPixel | CWOverrideRedirect;
-#ifdef BUILD_ARGB
-			}
-#endif /* BUILD_ARGB */
-
-			if (*own_window_type == TYPE_DOCK) {
-				window.x = window.y = 0;
-			}
-			/* Parent is root window so WM can take control */
-			window.window = XCreateWindow(display, window.root, window.x,
-					window.y, b, b, 0, depth, InputOutput, visual,
-					flags, &attrs);
+			create_window(false);
 
 			// class_name must be a named local variable, so that c_str() remains valid until we
 			// call XmbSetWMProperties(). We use const_cast because, for whatever reason,
@@ -491,21 +454,22 @@ namespace conky {
 			uint16_t hints = *own_window_hints;
 
 			wmHint.flags = InputHint | StateHint;
+
 			/* allow decorated windows to be given input focus by WM */
-			wmHint.input =
-				TEST_HINT(hints, HINT_UNDECORATED) ? False : True;
+			wmHint.input = hints&HINT_UNDECORATED ? False : True;
+
 			if (*own_window_type == TYPE_DOCK || *own_window_type == TYPE_PANEL) {
 				wmHint.initial_state = WithdrawnState;
 			} else {
 				wmHint.initial_state = NormalState;
 			}
 
-			XmbSetWMProperties(display, window.window, NULL, NULL, argv_copy,
+			XmbSetWMProperties(display, window, NULL, NULL, argv_copy,
 					argc_copy, NULL, &wmHint, &classHint);
-			XStoreName(display, window.window, *own_window_title.c_str() );
+			XStoreName(display, window, own_window_title->c_str() );
 
 			/* Sets an empty WM_PROTOCOLS property */
-			XSetWMProtocols(display, window.window, NULL, 0);
+			XSetWMProtocols(display, window, NULL, 0);
 
 			/* Set window type */
 			if ((xa = ATOM(_NET_WM_WINDOW_TYPE)) != None) {
@@ -515,54 +479,44 @@ namespace conky {
 					case TYPE_DESKTOP:
 						prop = ATOM(_NET_WM_WINDOW_TYPE_DESKTOP);
 						fprintf(stderr, PACKAGE_NAME": window type - desktop\n");
-						fflush(stderr);
 						break;
 					case TYPE_DOCK:
 						prop = ATOM(_NET_WM_WINDOW_TYPE_DOCK);
 						fprintf(stderr, PACKAGE_NAME": window type - dock\n");
-						fflush(stderr);
 						break;
 					case TYPE_PANEL:
 						prop = ATOM(_NET_WM_WINDOW_TYPE_DOCK);
 						fprintf(stderr, PACKAGE_NAME": window type - panel\n");
-						fflush(stderr);
 						break;
 					case TYPE_NORMAL:
 					default:
 						prop = ATOM(_NET_WM_WINDOW_TYPE_NORMAL);
 						fprintf(stderr, PACKAGE_NAME": window type - normal\n");
-						fflush(stderr);
 						break;
 				}
-				XChangeProperty(display, window.window, xa, XA_ATOM, 32,
+				XChangeProperty(display, window, xa, XA_ATOM, 32,
 						PropModeReplace, (unsigned char *) &prop, 1);
 			}
 
 			/* Set desired hints */
 
 			/* Window decorations */
-			if (TEST_HINT(hints, HINT_UNDECORATED)) {
-				/* fprintf(stderr, PACKAGE_NAME": hint - undecorated\n");
-				   fflush(stderr); */
-
+			if(hints & HINT_UNDECORATED) {
 				xa = ATOM(_MOTIF_WM_HINTS);
 				if (xa != None) {
 					long prop[5] = { 2, 0, 0, 0, 0 };
-					XChangeProperty(display, window.window, xa, xa, 32,
+					XChangeProperty(display, window, xa, xa, 32,
 							PropModeReplace, (unsigned char *) prop, 5);
 				}
 			}
 
 			/* Below other windows */
-			if (TEST_HINT(hints, HINT_BELOW)) {
-				/* fprintf(stderr, PACKAGE_NAME": hint - below\n");
-				   fflush(stderr); */
-
+			if (hints & HINT_BELOW) {
 				xa = ATOM(_WIN_LAYER);
 				if (xa != None) {
 					long prop = 0;
 
-					XChangeProperty(display, window.window, xa, XA_CARDINAL, 32,
+					XChangeProperty(display, window, xa, XA_CARDINAL, 32,
 							PropModeAppend, (unsigned char *) &prop, 1);
 				}
 
@@ -570,21 +524,18 @@ namespace conky {
 				if (xa != None) {
 					Atom xa_prop = ATOM(_NET_WM_STATE_BELOW);
 
-					XChangeProperty(display, window.window, xa, XA_ATOM, 32,
+					XChangeProperty(display, window, xa, XA_ATOM, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 			}
 
 			/* Above other windows */
-			if (TEST_HINT(hints, HINT_ABOVE)) {
-				/* fprintf(stderr, PACKAGE_NAME": hint - above\n");
-				   fflush(stderr); */
-
+			if (hints & HINT_ABOVE) {
 				xa = ATOM(_WIN_LAYER);
 				if (xa != None) {
 					long prop = 6;
 
-					XChangeProperty(display, window.window, xa, XA_CARDINAL, 32,
+					XChangeProperty(display, window, xa, XA_CARDINAL, 32,
 							PropModeAppend, (unsigned char *) &prop, 1);
 				}
 
@@ -592,21 +543,18 @@ namespace conky {
 				if (xa != None) {
 					Atom xa_prop = ATOM(_NET_WM_STATE_ABOVE);
 
-					XChangeProperty(display, window.window, xa, XA_ATOM, 32,
+					XChangeProperty(display, window, xa, XA_ATOM, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 			}
 
 			/* Sticky */
-			if (TEST_HINT(hints, HINT_STICKY)) {
-				/* fprintf(stderr, PACKAGE_NAME": hint - sticky\n");
-				   fflush(stderr); */
-
+			if (hints & HINT_STICKY) {
 				xa = ATOM(_NET_WM_DESKTOP);
 				if (xa != None) {
 					CARD32 xa_prop = 0xFFFFFFFF;
 
-					XChangeProperty(display, window.window, xa, XA_CARDINAL, 32,
+					XChangeProperty(display, window, xa, XA_CARDINAL, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 
@@ -614,57 +562,47 @@ namespace conky {
 				if (xa != None) {
 					Atom xa_prop = ATOM(_NET_WM_STATE_STICKY);
 
-					XChangeProperty(display, window.window, xa, XA_ATOM, 32,
+					XChangeProperty(display, window, xa, XA_ATOM, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 			}
 
 			/* Skip taskbar */
-			if (TEST_HINT(hints, HINT_SKIP_TASKBAR)) {
-				/* fprintf(stderr, PACKAGE_NAME": hint - skip_taskbar\n");
-				   fflush(stderr); */
-
+			if (hints & HINT_SKIP_TASKBAR) {
 				xa = ATOM(_NET_WM_STATE);
 				if (xa != None) {
 					Atom xa_prop = ATOM(_NET_WM_STATE_SKIP_TASKBAR);
 
-					XChangeProperty(display, window.window, xa, XA_ATOM, 32,
+					XChangeProperty(display, window, xa, XA_ATOM, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 			}
 
 			/* Skip pager */
-			if (TEST_HINT(hints, HINT_SKIP_PAGER)) {
-				/* fprintf(stderr, PACKAGE_NAME": hint - skip_pager\n");
-				   fflush(stderr); */
+			if (hints & HINT_SKIP_PAGER) {
 
 				xa = ATOM(_NET_WM_STATE);
 				if (xa != None) {
 					Atom xa_prop = ATOM(_NET_WM_STATE_SKIP_PAGER);
 
-					XChangeProperty(display, window.window, xa, XA_ATOM, 32,
+					XChangeProperty(display, window, xa, XA_ATOM, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 			}
 		}
 
-		fprintf(stderr, PACKAGE_NAME": drawing to created window (0x%lx)\n",
-				window.window);
-		fflush(stderr);
+		fprintf(stderr, PACKAGE_NAME": drawing to created window (0x%lx)\n", window);
 
-		XMapWindow(display, window.window);
+		XMapWindow(display, window);
 
 
 		/* Drawable is same as window. This may be changed by double buffering. */
-		window.drawable = window.window;
+		drawable = window;
 
 		XFlush(display);
 
-		XSelectInput(display, window.window, ExposureMask | PropertyChangeMask
-				| (*own_window ? (StructureNotifyMask |
-						ButtonPressMask | ButtonReleaseMask) : 0)
-				);
-#endif
+		XSelectInput(display, window, ExposureMask | PropertyChangeMask | StructureNotifyMask
+				| ButtonPressMask | ButtonReleaseMask );
 	}
 
 	/* Find root window and desktop window.
