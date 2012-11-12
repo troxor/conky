@@ -41,9 +41,6 @@
 #ifdef BUILD_IMLIB2
 #include "imlib2.h"
 #endif /* BUILD_IMLIB2 */
-#ifndef OWN_WINDOW
-#include <iostream>
-#endif
 #ifdef BUILD_XFT
 #include <X11/Xft/Xft.h>
 #endif
@@ -796,13 +793,6 @@ void destroy_window(void)
 		XFreeGC(display, window.gc);
 	}
 	memset(&window, 0, sizeof(struct conky_window));
-}
-
-static void  __attribute__((unused)) init_window(bool)
-{
-#ifdef OWN_WINDOW
-	if (own) {
-#endif /* OWN_WINDOW */
 }
 
 #if 0

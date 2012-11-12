@@ -302,9 +302,7 @@ static void print_version(void)
 # ifdef BUILD_ARGB
                 << _("  * ARGB visual\n")
 # endif /* BUILD_ARGB */
-#ifdef OWN_WINDOW
                 << _("  * Own window\n")
-#endif
 #endif /* BUILD_X11 */
 #if defined BUILD_AUDACIOUS || defined BUILD_BMPX || defined BUILD_CMUS || defined BUILD_MPD || defined BUILD_MOC || defined BUILD_XMMS2
                 << _("\n Music detection:\n")
@@ -972,9 +970,7 @@ static void update_text_area(void)
 	if (not *out_to_x)
 		return;
 	/* update text size if it isn't fixed */
-#ifdef OWN_WINDOW
 	if (!fixed_size)
-#endif
 	{
 		text_width = *minimum_width;
 		text_height = 0;
@@ -1018,7 +1014,6 @@ static void update_text_area(void)
 			x = workarea[2] / 2 - text_width / 2 - *gap_x;
 			break;
 	}
-#ifdef OWN_WINDOW
 	if (align == NONE) {	// Let the WM manage the window
 			x = window.x;
 			y = window.y;
@@ -1026,9 +1021,6 @@ static void update_text_area(void)
 			fixed_pos = 1;
 			fixed_size = 1;
 	}
-#endif /* OWN_WINDOW */
-#ifdef OWN_WINDOW
-
 	if (*own_window && !fixed_pos) {
 		x += workarea[0];
 		y += workarea[1];
@@ -1038,7 +1030,6 @@ static void update_text_area(void)
 		window.x = x - border_total;
 		window.y = y - border_total;
 	} else
-#endif
 	{
 		/* If window size doesn't match to workarea's size,
 		 * then window probably includes panels (gnome).
@@ -2010,15 +2001,12 @@ void old_main_loop(void)
 			}
 
 			if (need_to_update) {
-#ifdef OWN_WINDOW
 				int wx = window.x, wy = window.y;
-#endif
 
 				need_to_update = 0;
 				selected_font = 0;
 				update_text_area();
 
-#ifdef OWN_WINDOW
 				if (*own_window) {
 					int changed = 0;
 					int border_total = get_border_total();
@@ -2104,7 +2092,6 @@ void old_main_loop(void)
 						set_struts(sidenum);
 					}
 				}
-#endif
 
 				clear_text(1);
 
@@ -2149,7 +2136,6 @@ void old_main_loop(void)
 						break;
 					}
 
-#ifdef OWN_WINDOW
 					case ReparentNotify:
 						/* make background transparent */
 						if (*own_window) {
@@ -2243,8 +2229,6 @@ void old_main_loop(void)
 							}
 						}
 						break;
-
-#endif
 
 					default:
 #ifdef BUILD_XDAMAGE
@@ -2540,14 +2524,12 @@ static void X11_create_window(void)
 		load_fonts(*utf8_mode);
 		update_text_area();	/* to position text/window on screen */
 
-#ifdef OWN_WINDOW
 		if (*own_window) {
 			if (not fixed_pos)
 				XMoveWindow(display, window.window, window.x, window.y);
 
 			set_transparent_background(window.window);
 		}
-#endif
 
 		create_gc();
 
@@ -2650,9 +2632,7 @@ static void print_help(const char *prog_name) {
 			"   -a, --alignment=ALIGNMENT text alignment on screen, {top,bottom,middle}_{left,right,middle}\n"
 			"   -f, --font=FONT           font to use\n"
 			"   -X, --display=DISPLAY     X11 display to use\n"
-#ifdef OWN_WINDOW
 			"   -o, --own-window          create own window to draw\n"
-#endif
 			"   -b, --double-buffer       double buffer (prevents flickering)\n"
 			"   -w, --window-id=WIN_ID    window id to draw\n"
 			"   -x X                      x position\n"
@@ -2679,9 +2659,7 @@ inline void reset_optind() {
 static const char *getopt_string = "vVqdDSs:t:u:i:hc:p:"
 #ifdef BUILD_X11
 	"x:y:w:a:f:X:"
-#ifdef OWN_WINDOW
 	"o"
-#endif
 	"b"
 #endif /* BUILD_X11 */
 #ifdef BUILD_BUILTIN_CONFIG
@@ -2703,9 +2681,7 @@ static const struct option longopts[] = {
 	{ "alignment", 1, NULL, 'a' },
 	{ "font", 1, NULL, 'f' },
 	{ "display", 1, NULL, 'X' },
-#ifdef OWN_WINDOW
 	{ "own-window", 0, NULL, 'o' },
-#endif
 	{ "double-buffer", 0, NULL, 'b' },
 	{ "window-id", 1, NULL, 'w' },
 #endif /* BUILD_X11 */
@@ -2791,13 +2767,10 @@ void initialisation(int argc, char **argv) {
 				state->pushstring(optarg);
 				display_name.lua_set(*state);
 				break;
-
-#ifdef OWN_WINDOW
 			case 'o':
 				state->pushboolean(true);
 				own_window.lua_set(*state);
 				break;
-#endif
 #ifdef BUILD_XDBE
 			case 'b':
 				state->pushboolean(true);

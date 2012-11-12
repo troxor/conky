@@ -75,10 +75,6 @@ struct conky_window {
 #endif
 
 	int width, height; // XXX
-#ifdef OWN_WINDOW
-	int x;
-	int y;
-#endif
 };
 
 extern struct conky_window window;
@@ -131,6 +127,7 @@ namespace conky {
 		int depth;
 		Colormap colourmap;
 		point window_size;
+		point position;
 		Drawable drawable;
 
 		Window find_subwindow(Window win);
