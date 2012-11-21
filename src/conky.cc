@@ -2885,8 +2885,6 @@ void initialisation(int argc, char **argv) {
 
 static void main_loop()
 {
-	bool terminate = false;
-
 	// block some signals
 	// we poll them later manually
 	sigset_t sigmask;
@@ -2896,26 +2894,15 @@ static void main_loop()
 
 	auto last_update = std::chrono::high_resolution_clock::now();
 
-	while(not terminate) {
+	while(true) {
 		struct timespec timeout;
 
 		// handle signals
 		timeout.tv_sec = 0;
 		timeout.tv_nsec = 0;
-		switch(sigtimedwait(&sigmask, NULL, &timeout)) {
-			case SIGINT:
-				terminate = 1;
-				break;
-
-			case -1:
-				if(errno!=EAGAIN && errno!=EINTR)
-					throw errno_error("sigtimedwait");
-		}
-
 
 		auto now = std::chrono::high_resolution_clock::now();
 		std::chrono::milliseconds aui((int)(1000*active_update_interval()));
-		int r = 0;
 		if(last_update <= now && (now-last_update) < aui) {
 			auto sleep_for = aui - (now-last_update);
 
@@ -2925,20 +2912,24 @@ static void main_loop()
 
 			timeout.tv_nsec
 				= std::chrono::duration_cast<std::chrono::nanoseconds>(sleep_for).count();
+		}
+		switch(sigtimedwait(&sigmask, NULL, &timeout)) {
+			case SIGINT:
+				return;
 
-			r = nanosleep(&timeout, NULL);
+			case -1:
+				if(errno == EAGAIN) // timeout expired
+					break;
+				if(errno!=EINTR)
+					throw errno_error("sigtimedwait");
+				// else, retry
+				continue;
 		}
-		if(r < 0) {
-			// some error occured. We cannot continue like this
-			if(errno != EINTR)
-				throw errno_error("pselect");
-		} else if(r == 0) {
-			// timeout expired, time to collect new data
-			// XXX conky::run_all_callbacks();
-			conky::output_methods.run_all_threads();
-			last_update = std::chrono::high_resolution_clock::now();
-		}
-		// else begin a new iteration of the loop
+
+		// time to collect new data
+		// XXX conky::run_all_callbacks();
+		conky::output_methods.run_all_threads();
+		last_update = std::chrono::high_resolution_clock::now();
 	}
 }
 
