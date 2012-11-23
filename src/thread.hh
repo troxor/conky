@@ -68,7 +68,6 @@ namespace conky {
 		virtual bool operator==(const thread_base &) { return false; }
 
 		void run(semaphore &sem_wait);
-		void start_routine(semaphore &sem_wait);
 		void stop();
 
 		static void deleter(thread_base *ptr)
@@ -106,6 +105,7 @@ namespace conky {
 		bool is_done()
 		{ return done; }
 
+		virtual void start_routine(semaphore &sem_wait);
 		virtual void work() = 0;
 		virtual void merge(thread_base &&);
 
