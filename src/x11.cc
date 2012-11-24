@@ -365,7 +365,7 @@ static int __attribute__((noreturn)) x11_ioerror_handler(Display *d)
 namespace conky {
 	x11_output::x11_output(uint32_t period, const std::string &display_)
 		: output_method(period, false), display(NULL), screen(0), window(0), root(0),
-		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0)
+		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0), gc(0)
 	{
 		// passing NULL to XOpenDisplay should open the default display
 		const char *disp = display_.size() ? display_.c_str() : NULL;
@@ -396,9 +396,9 @@ namespace conky {
 		fprintf(stderr, PACKAGE_NAME": drawing to desktop window\n");
 		drawable = desktop;
 
-		XFlush(display);
-
 		XSelectInput(display, desktop, ExposureMask | PropertyChangeMask);
+
+		create_gc();
 	}
 
 	void x11_output::create_window(bool override) {
@@ -596,10 +596,10 @@ namespace conky {
 		/* Drawable is same as window. This may be changed by double buffering. */
 		drawable = window;
 
-		XFlush(display);
-
 		XSelectInput(display, window, ExposureMask | PropertyChangeMask | StructureNotifyMask
 				| ButtonPressMask | ButtonReleaseMask );
+
+		create_gc();
 	}
 
 	/* Find root window and desktop window.
@@ -730,11 +730,31 @@ namespace conky {
 		return false;
 	}
 
-	void x11_output::work() {}
-	point x11_output::get_text_size(const std::u32string &) const
-	{ return { 0, 0 }; }
+	void x11_output::create_gc()
+	{
+		XGCValues values;
+
+		values.graphics_exposures = 0;
+		values.function = GXcopy;
+		gc = XCreateGC(display, drawable,
+				GCFunction | GCGraphicsExposures, &values);
+
+		XFlush(display);
+	}
+
+	void x11_output::work()
+	{
+		point size = get_global_text()->size(*this);
+		if(window)
+			XResizeWindow(display, window, size.x, size.y);
+		get_global_text()->draw(*this, point(0, 0), size);
+		XFlush(display);
+	}
+
+	point x11_output::get_text_size(const std::u32string &text) const
+	{ return get_text_size(conv.to_utf8(text)); }
 	point x11_output::get_text_size(const std::string &) const
-	{ return { 0, 0 }; }
+	{ return { 100, 100 }; }
 	void x11_output::draw_text(const std::string &, const point &, const point &) {}
 	void x11_output::draw_text(const std::u32string &, const point &, const point &) {}
 }
@@ -789,23 +809,8 @@ void destroy_window(void)
 		XftDrawDestroy(window.xftdraw);
 	}
 #endif /* BUILD_XFT */
-	if(window.gc) {
-		XFreeGC(display, window.gc);
-	}
 	memset(&window, 0, sizeof(struct conky_window));
 }
-
-#if 0
-void create_gc(void)
-{
-	XGCValues values;
-
-	values.graphics_exposures = 0;
-	values.function = GXcopy;
-	window.gc = XCreateGC(display, window.drawable,
-			GCFunction | GCGraphicsExposures, &values);
-}
-#endif
 
 //Get current desktop number
 static inline void get_x11_desktop_current(Display *current_display, Window root, Atom atom)

@@ -40,6 +40,7 @@
 
 #include "output-method.hh"
 #include "setting.hh"
+#include "unicode.hh"
 #include "colours.h"
 
 #define ATOM(a) XInternAtom(display, #a, False)
@@ -117,6 +118,8 @@ extern conky::simple_config_setting<alignment>   text_alignment;
 namespace conky {
 
 	class x11_output: public output_method {
+		unicode_converter conv;
+
 		Display *display;
 		point display_size;
 		int screen;
@@ -129,10 +132,13 @@ namespace conky {
 		point window_size;
 		point position;
 		Drawable drawable;
+		GC gc;
 
 		Window find_subwindow(Window win);
 		void find_root_and_desktop_window();
 		void create_window(bool override);
+		void create_gc();
+
 	protected:
 		virtual void work();
 
@@ -140,6 +146,8 @@ namespace conky {
 		x11_output(uint32_t period, const std::string &display_);
 		~x11_output()
 		{
+			if(gc != 0)
+				XFreeGC(display, gc);
 			if(window != 0)
 				XDestroyWindow(display, window);
 			XCloseDisplay(display);

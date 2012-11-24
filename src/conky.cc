@@ -2531,8 +2531,6 @@ static void X11_create_window(void)
 			set_transparent_background(window.window);
 		}
 
-		create_gc();
-
 		draw_stuff();
 
 		x11_stuff.region = XCreateRegion();
