@@ -365,7 +365,7 @@ static int __attribute__((noreturn)) x11_ioerror_handler(Display *d)
 namespace conky {
 	x11_output::x11_output(uint32_t period, const std::string &display_)
 		: output_method(period, false), display(NULL), screen(0), window(0), root(0),
-		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0), gc(0)
+		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0), gc(0), fontset(NULL)
 	{
 		// passing NULL to XOpenDisplay should open the default display
 		const char *disp = display_.size() ? display_.c_str() : NULL;
@@ -738,6 +738,23 @@ namespace conky {
 		values.function = GXcopy;
 		gc = XCreateGC(display, drawable,
 				GCFunction | GCGraphicsExposures, &values);
+
+		char **missing_charset_list;
+		int missing_charset_count;
+		char *def_string;
+		fontset = XCreateFontSet(display, "fixed", &missing_charset_list,
+				&missing_charset_count, &def_string);
+		if(fontset == NULL)
+			throw std::runtime_error("Unable to create font set for font 'fixed'.");
+		if(missing_charset_count > 0) {
+			std::string charsets = '\'' + std::string(missing_charset_list[0]) + '\'';
+			for(int i = 1; i < missing_charset_count; ++i)
+				charsets += std::string(", '") + missing_charset_list[i] + '\'';
+			XFreeStringList(missing_charset_list);
+			NORM_ERR("Unable to load some character sets (%s) for font 'fixed'. "
+					"Continuing, but missing characters will be replaced by '%s'.",
+					charsets.c_str(), def_string);
+		}
 
 		XFlush(display);
 	}

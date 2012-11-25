@@ -132,14 +132,6 @@ void free_fonts(bool utf8) {
 			 */
 		} else
 #endif /* BUILD_XFT */
-		{
-			if (fonts[i].font) {
-				XFreeFont(display, fonts[i].font);
-			}
-			if (utf8 && fonts[i].fontset) {
-				XFreeFontSet(display, fonts[i].fontset);
-			}
-		}
 	}
 	fonts.clear();
 	selected_font = 0;
@@ -176,27 +168,6 @@ void load_fonts(bool utf8) {
 			continue;
 		}
 #endif
-		if(utf8 && fonts[i].fontset == NULL) {
-			char** missing;
-			int missingnum;
-			char* missingdrawn;
-			fonts[i].fontset = XCreateFontSet(display, fonts[i].name.c_str(), &missing, &missingnum, &missingdrawn);
-			XFreeStringList(missing);
-			if(fonts[i].fontset == NULL) {
-				NORM_ERR("can't load font '%s'", fonts[i].name.c_str());
-				fonts[i].fontset = XCreateFontSet(display, "fixed", &missing, &missingnum, &missingdrawn);
-				if(fonts[i].fontset == NULL) {
-					CRIT_ERR(NULL, NULL, "can't load font '%s'", "fixed");
-				}
-			}
-		}
-		/* load normal font */
-		if (!fonts[i].font && (fonts[i].font = XLoadQueryFont(display, fonts[i].name.c_str())) == NULL) {
-			NORM_ERR("can't load font '%s'", fonts[i].name.c_str());
-			if ((fonts[i].font = XLoadQueryFont(display, "fixed")) == NULL) {
-				CRIT_ERR(NULL, NULL, "can't load font '%s'", "fixed");
-			}
-		}
 	}
 }
 

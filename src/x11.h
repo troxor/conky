@@ -134,6 +134,8 @@ namespace conky {
 		Drawable drawable;
 		GC gc;
 
+		XFontSet fontset;
+
 		Window find_subwindow(Window win);
 		void find_root_and_desktop_window();
 		void create_window(bool override);
@@ -146,6 +148,8 @@ namespace conky {
 		x11_output(uint32_t period, const std::string &display_);
 		~x11_output()
 		{
+			if(fontset)
+				XFreeFontSet(display, fontset);
 			if(gc != 0)
 				XFreeGC(display, gc);
 			if(window != 0)
