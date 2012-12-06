@@ -404,7 +404,8 @@ namespace conky {
 
 	x11_output::x11_output(uint32_t period, const std::string &display_)
 		: output_method(period, false), display(NULL), screen(0), window(0), root(0),
-		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0), gc(0), fontset(NULL)
+		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0), gc(0), fontset(NULL),
+		  font_extents(NULL)
 	{
 		// passing NULL to XOpenDisplay should open the default display
 		const char *disp = display_.size() ? display_.c_str() : NULL;
@@ -794,6 +795,7 @@ namespace conky {
 					"Continuing, but missing characters will be replaced by '%s'.",
 					charsets.c_str(), def_string);
 		}
+		font_extents = XExtentsOfFontSet(fontset);
 
 		colours = colour_factory::create(*display, *visual, colourmap);
 		fg_colour = colours->get_colour("white");
@@ -813,10 +815,25 @@ namespace conky {
 
 	point x11_output::get_text_size(const std::u32string &text) const
 	{ return get_text_size(conv.to_utf8(text)); }
-	point x11_output::get_text_size(const std::string &) const
-	{ return { 100, 100 }; }
-	void x11_output::draw_text(const std::string &, const point &, const point &) {}
-	void x11_output::draw_text(const std::u32string &, const point &, const point &) {}
+
+	point x11_output::get_text_size(const std::string &text) const
+	{
+		XRectangle size;
+		Xutf8TextExtents(fontset, text.c_str(), text.length(), NULL, &size);
+		return { size.width,
+			font_extents->max_logical_extent.height - font_extents->max_logical_extent.y };
+
+	}
+
+	void x11_output::draw_text(const std::u32string &text, const point &p, const point &size)
+	{ draw_text(conv.to_utf8(text), p, size); }
+
+	void x11_output::draw_text(const std::string &text, const point &p, const point &)
+	{
+		// TODO: clipping ?
+		Xutf8DrawString(display, drawable, fontset, gc,
+				p.x, p.y - font_extents->max_logical_extent.y, text.c_str(), text.length());
+	}
 }
 
 #ifdef OWN_WINDOW

@@ -183,6 +183,8 @@ namespace conky {
 		GC gc;
 
 		XFontSet fontset;
+		XFontSetExtents *font_extents;
+
 		std::unique_ptr<colour_factory> colours;
 		std::unique_ptr<colour> fg_colour;
 
