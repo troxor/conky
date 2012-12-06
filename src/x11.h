@@ -118,6 +118,54 @@ extern conky::simple_config_setting<alignment>   text_alignment;
 namespace conky {
 
 	class x11_output: public output_method {
+		class colour {
+			unsigned long pixel;
+
+		public:
+			explicit colour(unsigned long pixel_) : pixel(pixel_) {}
+			virtual ~colour() { }
+
+			unsigned long get_pixel() { return pixel; }
+		};
+
+		class colour_factory {
+		protected:
+			Display &display;
+			const Colormap colourmap;
+
+		public:
+			colour_factory(Display &display_, Colormap colourmap_)
+				: display(display_), colourmap(colourmap_)
+			{ }
+
+			virtual ~colour_factory() { }
+
+			std::unique_ptr<colour> get_colour(const char *name);
+
+			virtual std::unique_ptr<colour> 
+			get_colour(uint16_t red, uint16_t green, uint16_t blue) = 0;
+
+			static std::unique_ptr<colour_factory>
+			create(Display &display, Visual &visual, Colormap colourmap);
+		};
+
+		class true_colour_factory: public colour_factory {
+			uint8_t red_shift;
+			uint8_t green_shift;
+			uint8_t blue_shift;
+			uint8_t rgb_bits;
+
+		public:
+			true_colour_factory(Display &display_, Visual &visual, Colormap colourmap_)
+				: colour_factory(display_, colourmap_), red_shift(ffs(visual.red_mask)-1),
+				  green_shift(ffs(visual.green_mask)-1), blue_shift(ffs(visual.blue_mask)-1),
+				  rgb_bits(visual.bits_per_rgb)
+			{ }
+
+			virtual std::unique_ptr<colour> 
+			get_colour(uint16_t red, uint16_t green, uint16_t blue);
+		};
+
 		unicode_converter conv;
 
 		Display *display;
@@ -135,6 +183,8 @@ namespace conky {
 		GC gc;
 
 		XFontSet fontset;
+		std::unique_ptr<colour_factory> colours;
+		std::unique_ptr<colour> fg_colour;
 
 		Window find_subwindow(Window win);
 		void find_root_and_desktop_window();

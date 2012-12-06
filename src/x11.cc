@@ -362,7 +362,46 @@ static int __attribute__((noreturn)) x11_ioerror_handler(Display *d)
 }
 #endif /* DEBUG */
 
+namespace {
+	unsigned long colour_shift(unsigned long value, uint8_t need, uint8_t shift)
+	{ return (value >> (16-need)) << shift; }
+}
+
 namespace conky {
+	std::unique_ptr<x11_output::colour_factory>
+	x11_output::colour_factory::create(Display &display, Visual &visual, Colormap colourmap)
+	{
+		switch(visual.c_class) {
+			case TrueColor:
+				return std::unique_ptr<colour_factory>(
+						new true_colour_factory(display, visual, colourmap));
+			default:
+				throw std::runtime_error(
+						strprintf("Unsupported visual class: %d.", visual.c_class));
+		}
+	}
+
+	std::unique_ptr<x11_output::colour>
+	x11_output::colour_factory::get_colour(const char *name)
+	{
+		XColor exact, screen;
+		if(XLookupColor(&display, colourmap, name, &exact, &screen) == 0) {
+			throw new std::runtime_error(
+					std::string("Unable to resolve colour name: `") + name + "'.");
+		}
+		return get_colour(screen.red, screen.green, screen.blue);
+	}
+
+	std::unique_ptr<x11_output::colour>
+	x11_output::true_colour_factory::get_colour(uint16_t red, uint16_t green, uint16_t blue)
+	{
+		return std::unique_ptr<colour>(new colour(
+					colour_shift(red, rgb_bits, red_shift) |
+					colour_shift(green, rgb_bits, green_shift) |
+					colour_shift(blue, rgb_bits, blue_shift)
+		));
+	}
+
 	x11_output::x11_output(uint32_t period, const std::string &display_)
 		: output_method(period, false), display(NULL), screen(0), window(0), root(0),
 		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0), gc(0), fontset(NULL)
@@ -755,6 +794,10 @@ namespace conky {
 					"Continuing, but missing characters will be replaced by '%s'.",
 					charsets.c_str(), def_string);
 		}
+
+		colours = colour_factory::create(*display, *visual, colourmap);
+		fg_colour = colours->get_colour("white");
+		XSetForeground(display, gc, fg_colour->get_pixel());
 
 		XFlush(display);
 	}
