@@ -204,9 +204,9 @@ namespace conky {
 		Display *display;
 		point display_size;
 		int screen;
-		Window window;
 		Window root;
 		Window desktop;
+		std::shared_ptr<Window> window;
 		Visual *visual;
 		int depth;
 		Colormap colourmap;
