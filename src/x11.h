@@ -199,6 +199,75 @@ namespace conky {
 			virtual std::shared_ptr<colour> get_colour(XColor &colour);
 		};
 
+		class buffer {
+			static std::unique_ptr<buffer> try_xdbe(Display &display, Window window);
+
+		protected:
+			Drawable drawable;
+
+		public:
+			buffer(Drawable drawable_) : drawable(drawable_) { }
+			virtual ~buffer() { }
+
+			Drawable get_drawable() { return drawable; }
+			virtual void swap(GC /*gc*/) { }
+			virtual void resize(const point &/*size*/) { }
+
+			static std::unique_ptr<buffer>
+			create(bool double_buffer, Display &display, Window window, point size,
+					unsigned int depth);
+		};
+
+		typedef buffer single_buffer;
+
+		class double_buffer: public buffer {
+		protected:
+			Display &display;
+			const Window window;
+
+		public:
+			double_buffer(Display &display_, Window window_, Drawable drawable)
+				: buffer(drawable), display(display_), window(window_)
+			{ }
+		};
+
+#ifdef BUILD_XDBE
+		class xdbe_buffer: public double_buffer {
+		public:
+			xdbe_buffer(Display &display_, Window window_, XdbeBackBuffer back_buffer)
+				: double_buffer(display_, window_, back_buffer)
+			{ }
+
+			virtual ~xdbe_buffer()
+			{ XdbeDeallocateBackBufferName(&display, drawable); }
+
+			virtual void swap(GC);
+		};
+#endif /* BUILD_XDBE */
+
+		class pixmap_buffer: public double_buffer {
+			point size;
+			unsigned int depth;
+
+		public:
+			pixmap_buffer(Display &display_, Window window_, point size_, unsigned int depth_)
+				: double_buffer(display_, window_,
+						XCreatePixmap(&display_, window_, size_.x, size_.y, depth_)),
+				  size(size_), depth(depth_)
+			{ }
+
+			virtual ~pixmap_buffer()
+			{ XFreePixmap(&display, drawable); }
+
+			virtual void swap(GC gc);
+			virtual void resize(const point &size_)
+			{
+				XFreePixmap(&display, drawable);
+				size = size_;
+				drawable = XCreatePixmap(&display, window, size.x, size.y, depth);
+			}
+		};
+
 		unicode_converter conv;
 
 		Display *display;
@@ -212,7 +281,7 @@ namespace conky {
 		Colormap colourmap;
 		point window_size;
 		point position;
-		Drawable drawable;
+		std::unique_ptr<buffer> drawable;
 		GC gc;
 
 		XFontSet fontset;
@@ -241,6 +310,7 @@ namespace conky {
 		bool set_visual(bool argb);
 		void use_root_window();
 		void use_own_window();
+		void setup_buffer(bool double_buffer);
 	};
 
 	namespace priv {
@@ -289,35 +359,21 @@ namespace conky {
 			static uint16_t from_lua(lua::state &l, int index, const std::string &description);
 			static void to_lua(lua::state &l, uint16_t t, const std::string &description);
 		};
+
+		class double_buffer_setting: public conky::simple_config_setting<bool> {
+			typedef conky::simple_config_setting<bool> Base;
+
+		public:
+			virtual const bool set(const bool &r, bool init);
+			double_buffer_setting()
+				: Base("double_buffer", false, false)
+			{}
+		};
+
 	} /* namespace conky::priv */
 } /* namespace conky */
 
 namespace priv {
-	class use_xdbe_setting: public conky::simple_config_setting<bool> {
-		typedef conky::simple_config_setting<bool> Base;
-	
-		bool set_up();
-
-	public:
-		virtual const bool set(const bool &r, bool init);
-		use_xdbe_setting()
-			: Base("double_buffer", false, false)
-		{}
-	};
-
-	class use_xpmdb_setting: public conky::simple_config_setting<bool> {
-		typedef conky::simple_config_setting<bool> Base;
-	
-		bool set_up();
-
-	public:
-		virtual const bool set(const bool &r, bool init);
-		use_xpmdb_setting()
-			: Base("double_buffer", false, false)
-		{}
-	};
-
-	
 	struct colour_traits {
 		static unsigned long
 		from_lua(lua::state &l, int index, const std::string &);
@@ -367,11 +423,7 @@ extern conky::range_config_setting<int>          own_window_argb_value;
 #endif
 extern conky::priv::own_window_setting			 own_window;
 
-#ifdef BUILD_XDBE
-extern priv::use_xdbe_setting					 use_xdbe;
-#else
-extern priv::use_xpmdb_setting					 use_xpmdb;
-#endif
+extern conky::priv::double_buffer_setting		 double_buffer;
 
 #endif /*X11_H_*/
 #endif /* BUILD_X11 */

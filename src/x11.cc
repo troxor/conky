@@ -45,19 +45,16 @@
 #include <X11/Xft/Xft.h>
 #endif
 
+// XXX: TEMPORARY stub variables
 #ifdef BUILD_ARGB
 bool have_argb_visual;
 #endif /* BUILD_ARGB */
-
-// XXX: TEMPORARY stub variables
 Display *display;
 int display_width;
 int display_height;
-int screen;
-
-
 /* Window stuff */
 struct conky_window window;
+
 
 /********************* <SETTINGS> ************************/
 namespace conky {
@@ -135,94 +132,27 @@ namespace conky {
 			l.pushstring(ret);
 		}
 
+		const bool double_buffer_setting::set(const bool &r, bool init)
+		{
+			assert(init);
+
+			if(*out_to_x) {
+				out_to_x.get_om()->setup_buffer(r);
+				value = r;
+			} else
+				value = false;
+
+			return value;
+		}
 	} /* namespace conky::priv */
 } /* namespace conky */
 
 namespace priv {
-#ifdef BUILD_XDBE
-	bool use_xdbe_setting::set_up()
-	{
-		// double_buffer makes no sense when not drawing to X
-		if(not *out_to_x)
-			return false;
-
-		int major, minor;
-
-		if (not XdbeQueryExtension(display, &major, &minor)) {
-			NORM_ERR("No compatible double buffer extension found");
-			return false;
-		}
-		
-		window.back_buffer = XdbeAllocateBackBufferName(display,
-				window.window, XdbeBackground);
-		if (window.back_buffer != None) {
-			window.drawable = window.back_buffer;
-		} else {
-			NORM_ERR("Failed to allocate back buffer");
-			return false;
-		}
-
-		XFlush(display);
-		return true;
-	}
-
-	const bool use_xdbe_setting::set(const bool &r, bool init)
-	{
-		if(init) {
-			if(r && set_up())
-				value = true;
-			else
-				value = false;
-
-			fprintf(stderr, PACKAGE_NAME": drawing to %s buffer\n",
-					value?"double":"single");
-		}
-		return value;
-	}
-
-
-
-#else
-	bool use_xpmdb_setting::set_up()
-	{
-		// double_buffer makes no sense when not drawing to X
-		if(not *out_to_x)
-			return false;
-
-		window.back_buffer = XCreatePixmap(display,
-				window.window, window.width+1, window.height+1, DefaultDepth(display, screen));
-		if (window.back_buffer != None) {
-// XXX			window.drawable = window.back_buffer;
-		} else {
-			NORM_ERR("Failed to allocate back buffer");
-			return false;
-		}
-		
-
-		XFlush(display);
-		return true;
-	}
-
-	const bool use_xpmdb_setting::set(const bool &r, bool init)
-	{
-		if(init) {
-			if(r && set_up())
-				value = true;
-			else
-				value = false;
-
-			fprintf(stderr, PACKAGE_NAME": drawing to %s buffer\n",
-					value?"double":"single");
-		}
-		return value;
-	}
-
 	unsigned long colour_traits::from_lua(lua::state &/*l*/, int /*index*/, const std::string &)
 	{
 		return 0;
 //		return *out_to_x ? get_x11_color(l.tostring(index)) : 0;
 	}
-#endif
 }
 
 template<>
@@ -320,12 +250,7 @@ conky::range_config_setting<int>          own_window_argb_value("own_window_argb
 																0, 255, 255, false);
 #endif
 conky::priv::own_window_setting			  own_window;
-
-#ifdef BUILD_XDBE
-priv::use_xdbe_setting			 		  use_xdbe;
-#else
-priv::use_xpmdb_setting			 		  use_xpmdb;
-#endif
+conky::priv::double_buffer_setting	 	  double_buffer;
 
 #ifdef BUILD_IMLIB2
 /*
@@ -440,6 +365,73 @@ namespace conky {
 		return std::shared_ptr<x11_output::colour>(new alloc_colour(colour.pixel, *this));
 	}
 
+	std::unique_ptr<x11_output::buffer>
+	x11_output::buffer::try_xdbe(Display &display, Window window)
+	{
+#ifdef BUILD_XDBE
+		int major, minor;
+
+		if (not XdbeQueryExtension(&display, &major, &minor)) {
+			NORM_ERR("No compatible double buffer extension found.");
+			return {};
+		}
+
+		XdbeBackBuffer back_buffer = XdbeAllocateBackBufferName(&display,
+				window, XdbeBackground);
+		if (back_buffer != None)
+			return std::unique_ptr<buffer>(new xdbe_buffer(display, window, back_buffer));
+		else {
+			NORM_ERR("Failed to allocate back buffer. Falling back to pixmap buffer.");
+			return {};
+		}
+#else
+		(void) display;
+		(void) window;
+		return {};
+#endif
+	}
+
+	std::unique_ptr<x11_output::buffer>
+	x11_output::buffer::create(
+			bool double_buffer, Display &display, Window window, point size, unsigned int depth) {
+
+		std::unique_ptr<buffer> ret;
+		const char *type;
+
+		if(not double_buffer) {
+			ret.reset(new single_buffer(window));
+			type = "single";
+		} else {
+			ret = try_xdbe(display, window);
+			if(ret)
+				type = "XDBE double";
+			else {
+				ret.reset(new pixmap_buffer(display, window, size, depth));
+				type = "pixmap double";
+			}
+		}
+		fprintf(stderr, PACKAGE_NAME": drawing to %s buffer\n", type);
+		return ret;
+	}
+
+#ifdef BUILD_XDBE
+	void x11_output::xdbe_buffer::swap(GC)
+	{
+		XdbeSwapInfo swap;
+
+		swap.swap_window = window;
+		swap.swap_action = XdbeBackground;
+		XdbeSwapBuffers(&display, &swap, 1);
+	}
+#endif /*BUILD_XDBE*/
+
+	void x11_output::pixmap_buffer::swap(GC gc)
+	{
+		XCopyArea(&display, drawable, window, gc, 0, 0, size.x, size.y, 0, 0);
+//		XSetForeground(&display, gc, 0); // XXX
+//		XFillRectangle(&display, drawable, gc, 0, 0, size.x, size.y);
+	}
+
 	x11_output::x11_output(uint32_t period, const std::string &display_)
 		: output_method(period, false), display(NULL), screen(0), root(0),
 		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0), gc(0), fontset(NULL),
@@ -471,6 +463,7 @@ namespace conky {
 			XFreeFontSet(display, fontset);
 		if(gc != 0)
 			XFreeGC(display, gc);
+		drawable.reset();
 		window.reset();
 		XCloseDisplay(display);
 	}
@@ -485,11 +478,8 @@ namespace conky {
 
 		fprintf(stderr, PACKAGE_NAME": drawing to desktop window\n");
 		window.reset(new Window(desktop));
-		drawable = desktop;
 
 		XSelectInput(display, *window, ExposureMask | PropertyChangeMask);
-
-		create_gc();
 	}
 
 	void x11_output::create_window(bool override) {
@@ -506,8 +496,8 @@ namespace conky {
 			attrs.event_mask |= ButtonPressMask | ButtonReleaseMask;
 
 		unsigned long flags = CWBorderPixel | CWColormap | CWOverrideRedirect | CWBackPixel;
-		int b = *border_inner_margin + *border_width
-			+ *border_outer_margin;
+		int b = std::max(*border_inner_margin + *border_width + *border_outer_margin, 1);
+		window_size = { b, b };
 
 		Window w = XCreateWindow(display, override ? desktop : root, 0, 0, b, b, 0, depth,
 				InputOutput, visual, flags, &attrs);
@@ -689,15 +679,8 @@ namespace conky {
 		fprintf(stderr, PACKAGE_NAME": drawing to created window (0x%lx)\n", *window);
 
 		XMapWindow(display, *window);
-
-
-		/* Drawable is same as window. This may be changed by double buffering. */
-		drawable = *window;
-
 		XSelectInput(display, *window, ExposureMask | PropertyChangeMask | StructureNotifyMask
 				| ButtonPressMask | ButtonReleaseMask );
-
-		create_gc();
 	}
 
 	/* Find root window and desktop window.
@@ -790,8 +773,9 @@ namespace conky {
 		return win;
 	}
 
-	bool x11_output::set_visual(bool argb) {
-		if(argb) {
+	bool x11_output::set_visual(bool argb)
+	{
+		if(argb && *own_window) {
 			/* code from gtk project, gdk_screen_get_rgba_visual */
 			XVisualInfo visual_template;
 			XVisualInfo *visual_list;
@@ -823,8 +807,15 @@ namespace conky {
 
 		visual = DefaultVisual(display, screen);
 		colourmap = DefaultColormap(display, screen);
-		depth = CopyFromParent;
+		depth = DefaultDepth(display, screen);
 		return false;
+	}
+
+	void x11_output::setup_buffer(bool double_buffer)
+	{
+		drawable = buffer::create(double_buffer, *display, *window, window_size, depth);
+
+		create_gc();
 	}
 
 	void x11_output::create_gc()
@@ -833,7 +824,7 @@ namespace conky {
 
 		values.graphics_exposures = 0;
 		values.function = GXcopy;
-		gc = XCreateGC(display, drawable,
+		gc = XCreateGC(display, drawable->get_drawable(),
 				GCFunction | GCGraphicsExposures, &values);
 
 		char **missing_charset_list;
@@ -866,7 +857,9 @@ namespace conky {
 		point size = get_global_text()->size(*this);
 		if(window)
 			XResizeWindow(display, *window, size.x, size.y);
+		drawable->resize(size);
 		get_global_text()->draw(*this, point(0, 0), size);
+		drawable->swap(gc);
 		XFlush(display);
 	}
 
@@ -888,7 +881,7 @@ namespace conky {
 	void x11_output::draw_text(const std::string &text, const point &p, const point &)
 	{
 		// TODO: clipping ?
-		Xutf8DrawString(display, drawable, fontset, gc,
+		Xutf8DrawString(display, drawable->get_drawable(), fontset, gc,
 				p.x, p.y - font_extents->max_logical_extent.y, text.c_str(), text.length());
 	}
 }
@@ -1203,26 +1196,3 @@ void set_struts(int sidenum)
 	}
 }
 #endif /* OWN_WINDOW */
-
-#ifdef BUILD_XDBE
-void xdbe_swap_buffers(void)
-{
-	if (*use_xdbe) {
-		XdbeSwapInfo swap;
-
-		swap.swap_window = window.window;
-		swap.swap_action = XdbeBackground;
-		XdbeSwapBuffers(display, &swap, 1);
-	}
-}
-#else
-void xpmdb_swap_buffers(void)
-{
-	if (*use_xpmdb) {
-		XCopyArea(display, window.back_buffer, window.window, window.gc, 0, 0, window.width, window.height, 0, 0);
-		XSetForeground(display, window.gc, 0);
-// XXX		XFillRectangle(display, window.drawable, window.gc, 0, 0, window.width, window.height);
-		XFlush(display);
-	}
-}
-#endif /* BUILD_XDBE */
