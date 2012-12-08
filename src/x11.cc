@@ -376,12 +376,12 @@ namespace conky {
 				return std::unique_ptr<colour_factory>(
 						new true_colour_factory(display, visual, colourmap));
 			default:
-				throw std::runtime_error(
-						strprintf("Unsupported visual class: %d.", visual.c_class));
+				return std::unique_ptr<colour_factory>(
+						new alloc_colour_factory(display, colourmap));
 		}
 	}
 
-	std::unique_ptr<x11_output::colour>
+	std::shared_ptr<x11_output::colour>
 	x11_output::colour_factory::get_colour(const char *name)
 	{
 		XColor exact, screen;
@@ -389,17 +389,55 @@ namespace conky {
 			throw new std::runtime_error(
 					std::string("Unable to resolve colour name: `") + name + "'.");
 		}
-		return get_colour(screen.red, screen.green, screen.blue);
+		return get_colour(screen);
 	}
 
-	std::unique_ptr<x11_output::colour>
+	std::shared_ptr<x11_output::colour>
+	x11_output::colour_factory::get_colour(uint16_t red, uint16_t green, uint16_t blue)
+	{
+		XColor colour;
+		colour.red = red;
+		colour.green = green;
+		colour.blue = blue;
+		return get_colour(colour);
+	}
+
+	std::shared_ptr<x11_output::colour>
 	x11_output::true_colour_factory::get_colour(uint16_t red, uint16_t green, uint16_t blue)
 	{
-		return std::unique_ptr<colour>(new colour(
+		return std::shared_ptr<colour>(new colour(
 					colour_shift(red, rgb_bits, red_shift) |
 					colour_shift(green, rgb_bits, green_shift) |
 					colour_shift(blue, rgb_bits, blue_shift)
 		));
+	}
+
+	x11_output::alloc_colour_factory::alloc_colour_factory(Display &display_, Colormap colourmap_)
+		: colour_factory(display_, colourmap_)
+	{
+		XColor w;
+		w.red = w.green = w.blue = 0xffff;
+		if(XAllocColor(&display, colourmap, &w) == 0)
+			throw std::runtime_error("Unable to allocate any colours in the colourmap.");
+		white.reset(new alloc_colour(w.pixel, *this));
+	}
+
+	std::shared_ptr<x11_output::colour>
+	x11_output::alloc_colour_factory::get_colour(XColor &colour)
+	{
+		if(XAllocColor(&display, colourmap, &colour) == 0) {
+			static bool warned = false;
+			if(not warned) {
+				warned = true;
+				NORM_ERR(_("Failed to allocate colourmap entry for #%04x%04x%04x. "
+							"All unallocated colours will be replaced by white."),
+						colour.red, colour.green, colour.blue);
+			}
+			colour.red = colour.green = colour.blue = 0xffff;
+			colour.pixel = white->get_pixel();
+			return white;
+		}
+		return std::shared_ptr<x11_output::colour>(new alloc_colour(colour.pixel, *this));
 	}
 
 	x11_output::x11_output(uint32_t period, const std::string &display_)
@@ -423,6 +461,19 @@ namespace conky {
 		XSetErrorHandler(&x11_error_handler);
 		XSetIOErrorHandler(&x11_ioerror_handler);
 #endif /* DEBUG */
+	}
+
+	x11_output::~x11_output()
+	{
+		fg_colour.reset();
+		colours.reset();
+		if(fontset)
+			XFreeFontSet(display, fontset);
+		if(gc != 0)
+			XFreeGC(display, gc);
+		if(window != 0)
+			XDestroyWindow(display, window);
+		XCloseDisplay(display);
 	}
 
 	void x11_output::use_root_window()
@@ -766,7 +817,6 @@ namespace conky {
 		visual = DefaultVisual(display, screen);
 		colourmap = DefaultColormap(display, screen);
 		depth = CopyFromParent;
-		visual = CopyFromParent;
 		return false;
 	}
 

@@ -119,7 +119,8 @@ namespace conky {
 
 	class x11_output: public output_method {
 		class colour {
-			unsigned long pixel;
+		protected:
+			const unsigned long pixel;
 
 		public:
 			explicit colour(unsigned long pixel_) : pixel(pixel_) {}
@@ -140,10 +141,19 @@ namespace conky {
 
 			virtual ~colour_factory() { }
 
-			std::unique_ptr<colour> get_colour(const char *name);
+			std::shared_ptr<colour> get_colour(const char *name);
 
-			virtual std::unique_ptr<colour> 
-			get_colour(uint16_t red, uint16_t green, uint16_t blue) = 0;
+			// One should implement at least one of the following two functions, because the
+			// default implementations just call each other
+			virtual std::shared_ptr<colour>
+			get_colour(uint16_t red, uint16_t green, uint16_t blue);
+
+			virtual std::shared_ptr<colour> get_colour(XColor &colour)
+			{
+				auto t = get_colour(colour.red, colour.green, colour.blue);
+				colour.pixel = t->get_pixel();
+				return t;
+			}
 
 			static std::unique_ptr<colour_factory>
 			create(Display &display, Visual &visual, Colormap colourmap);
@@ -162,8 +172,31 @@ namespace conky {
 				  rgb_bits(visual.bits_per_rgb)
 			{ }
 
-			virtual std::unique_ptr<colour> 
+			virtual std::shared_ptr<colour>
 			get_colour(uint16_t red, uint16_t green, uint16_t blue);
+		};
+
+		class alloc_colour_factory: public colour_factory {
+			class alloc_colour: public colour {
+				const alloc_colour_factory &factory;
+
+			public:
+				alloc_colour(unsigned long pixel, const alloc_colour_factory &factory_)
+					: colour(pixel), factory(factory_)
+				{ }
+
+				virtual ~alloc_colour()
+				{
+					// const_cast is here because of a stupid interface
+					XFreeColors(&factory.display, factory.colourmap,
+							const_cast<unsigned long *>(&pixel), 1, 0);
+				}
+			};
+
+			std::shared_ptr<colour> white;
+		public:
+			alloc_colour_factory(Display &display_, Colormap colourmap_);
+			virtual std::shared_ptr<colour> get_colour(XColor &colour);
 		};
 
 		unicode_converter conv;
@@ -186,7 +219,7 @@ namespace conky {
 		XFontSetExtents *font_extents;
 
 		std::unique_ptr<colour_factory> colours;
-		std::unique_ptr<colour> fg_colour;
+		std::shared_ptr<colour> fg_colour;
 
 		Window find_subwindow(Window win);
 		void find_root_and_desktop_window();
@@ -198,16 +231,7 @@ namespace conky {
 
 	public:
 		x11_output(uint32_t period, const std::string &display_);
-		~x11_output()
-		{
-			if(fontset)
-				XFreeFontSet(display, fontset);
-			if(gc != 0)
-				XFreeGC(display, gc);
-			if(window != 0)
-				XDestroyWindow(display, window);
-			XCloseDisplay(display);
-		}
+		~x11_output();
 
 		virtual point get_text_size(const std::string &text) const;
 		virtual point get_text_size(const std::u32string &text) const;
