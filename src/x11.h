@@ -93,12 +93,6 @@ void print_desktop(struct text_object *, char *, int);
 void print_desktop_number(struct text_object *, char *, int);
 void print_desktop_name(struct text_object *, char *, int);
 
-#ifdef BUILD_XDBE
-void xdbe_swap_buffers(void);
-#else
-void xpmdb_swap_buffers(void);
-#endif /* BUILD_XDBE */
-
 /* alignments */
 enum alignment {
 	TOP_LEFT,
@@ -126,7 +120,7 @@ namespace conky {
 			explicit colour(unsigned long pixel_) : pixel(pixel_) {}
 			virtual ~colour() { }
 
-			unsigned long get_pixel() { return pixel; }
+			unsigned long get_pixel() const { return pixel; }
 		};
 
 		class colour_factory {
@@ -199,74 +193,12 @@ namespace conky {
 			virtual std::shared_ptr<colour> get_colour(XColor &colour);
 		};
 
-		class buffer {
-			static std::unique_ptr<buffer> try_xdbe(Display &display, Window window);
-
-		protected:
-			Drawable drawable;
-
-		public:
-			buffer(Drawable drawable_) : drawable(drawable_) { }
-			virtual ~buffer() { }
-
-			Drawable get_drawable() { return drawable; }
-			virtual void swap(GC /*gc*/) { }
-			virtual void resize(const point &/*size*/) { }
-
-			static std::unique_ptr<buffer>
-			create(bool double_buffer, Display &display, Window window, point size,
-					unsigned int depth);
-		};
-
+		// (double) buffering classes
+		class buffer;
 		typedef buffer single_buffer;
-
-		class double_buffer: public buffer {
-		protected:
-			Display &display;
-			const Window window;
-
-		public:
-			double_buffer(Display &display_, Window window_, Drawable drawable)
-				: buffer(drawable), display(display_), window(window_)
-			{ }
-		};
-
-#ifdef BUILD_XDBE
-		class xdbe_buffer: public double_buffer {
-		public:
-			xdbe_buffer(Display &display_, Window window_, XdbeBackBuffer back_buffer)
-				: double_buffer(display_, window_, back_buffer)
-			{ }
-
-			virtual ~xdbe_buffer()
-			{ XdbeDeallocateBackBufferName(&display, drawable); }
-
-			virtual void swap(GC);
-		};
-#endif /* BUILD_XDBE */
-
-		class pixmap_buffer: public double_buffer {
-			point size;
-			unsigned int depth;
-
-		public:
-			pixmap_buffer(Display &display_, Window window_, point size_, unsigned int depth_)
-				: double_buffer(display_, window_,
-						XCreatePixmap(&display_, window_, size_.x, size_.y, depth_)),
-				  size(size_), depth(depth_)
-			{ }
-
-			virtual ~pixmap_buffer()
-			{ XFreePixmap(&display, drawable); }
-
-			virtual void swap(GC gc);
-			virtual void resize(const point &size_)
-			{
-				XFreePixmap(&display, drawable);
-				size = size_;
-				drawable = XCreatePixmap(&display, window, size.x, size.y, depth);
-			}
-		};
+		class double_buffer;
+		class xdbe_buffer;
+		class pixmap_buffer;
 
 		unicode_converter conv;
 
@@ -282,7 +214,6 @@ namespace conky {
 		point window_size;
 		point position;
 		std::unique_ptr<buffer> drawable;
-		GC gc;
 
 		XFontSet fontset;
 		XFontSetExtents *font_extents;
@@ -293,7 +224,7 @@ namespace conky {
 		Window find_subwindow(Window win);
 		void find_root_and_desktop_window();
 		void create_window(bool override);
-		void create_gc();
+		void create_fontset();
 
 	protected:
 		virtual void work();

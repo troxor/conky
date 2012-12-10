@@ -365,6 +365,72 @@ namespace conky {
 		return std::shared_ptr<x11_output::colour>(new alloc_colour(colour.pixel, *this));
 	}
 
+	class x11_output::buffer {
+		static std::unique_ptr<buffer> try_xdbe(Display &display, Window window);
+
+	protected:
+		Display &display;
+		Drawable drawable;
+		GC gc;
+
+	public:
+		buffer(Display &display_, Drawable drawable_)
+			: display(display_), drawable(drawable_)
+		{
+			XGCValues values;
+			values.graphics_exposures = 0;
+			values.function = GXcopy;
+			gc = XCreateGC(&display, drawable, GCFunction | GCGraphicsExposures, &values);
+		}
+
+		virtual ~buffer() { XFreeGC(&display, gc); }
+
+		Drawable get_drawable() { return drawable; }
+		virtual void swap() { }
+		virtual void resize(const point &/*size*/) { }
+		void set_foreground(const colour &c) { XSetForeground(&display, gc, c.get_pixel()); }
+		virtual void draw_string(XFontSet font_set, const point &pos, const std::string &text)
+		{
+			Xutf8DrawString(&display, drawable, font_set, gc, pos.x, pos.y,
+					text.c_str(), text.length());
+		}
+
+		static std::unique_ptr<buffer>
+		create(bool double_buffer, Display &display, Window window, point size,
+				unsigned int depth);
+	};
+
+	class x11_output::double_buffer: public buffer {
+	protected:
+		const Window window;
+
+	public:
+		double_buffer(Display &display_, Window window_, Drawable drawable_)
+			: buffer(display_, drawable_), window(window_)
+		{ }
+	};
+
+#ifdef BUILD_XDBE
+	class x11_output::xdbe_buffer: public double_buffer {
+	public:
+		xdbe_buffer(Display &display_, Window window_, XdbeBackBuffer back_buffer)
+			: double_buffer(display_, window_, back_buffer)
+		{ }
+
+		virtual ~xdbe_buffer()
+		{ XdbeDeallocateBackBufferName(&display, drawable); }
+
+		virtual void swap()
+		{
+			XdbeSwapInfo swap;
+
+			swap.swap_window = window;
+			swap.swap_action = XdbeBackground;
+			XdbeSwapBuffers(&display, &swap, 1);
+		}
+	};
+#endif /*BUILD_XDBE*/
+
 	std::unique_ptr<x11_output::buffer>
 	x11_output::buffer::try_xdbe(Display &display, Window window)
 	{
@@ -391,15 +457,99 @@ namespace conky {
 #endif
 	}
 
+	class x11_output::pixmap_buffer: public double_buffer {
+		Pixmap mask;
+		point size;
+		unsigned int depth;
+		GC mask_gc;
+		GC copy_gc;
+
+		void create_mask()
+		{ mask = XCreatePixmap(&display, window, size.x, size.y, 1); }
+
+		void clear_mask()
+		{
+			XSetForeground(&display, mask_gc, 0);
+			XFillRectangle(&display, mask, mask_gc, 0, 0, size.x, size.y);
+			XSetForeground(&display, mask_gc, 1);
+		}
+	public:
+		pixmap_buffer(Display &display_, Window window_, point size_, unsigned int depth_);
+
+		virtual ~pixmap_buffer()
+		{
+			XFreePixmap(&display, drawable);
+			XFreeGC(&display, mask_gc);
+			XFreeGC(&display, copy_gc);
+		}
+
+		virtual void swap()
+		{
+			XCopyArea(&display, drawable, window, copy_gc, 0, 0, size.x, size.y, 0, 0);
+			XFillRectangle(&display, drawable, copy_gc, 0, 0, size.x, size.y);
+			clear_mask();
+		}
+
+		virtual void resize(const point &size_);
+
+		virtual void draw_string(XFontSet font_set, const point &pos, const std::string &text)
+		{
+			buffer::draw_string(font_set, pos, text);
+
+			Xutf8DrawString(&display, mask, font_set, mask_gc, pos.x, pos.y,
+					text.c_str(), text.length());
+		}
+	};
+
+	x11_output::pixmap_buffer::pixmap_buffer(Display &display_, Window window_,
+											 point size_, unsigned int depth_)
+		: double_buffer(display_, window_,
+				XCreatePixmap(&display_, window_, size_.x, size_.y, depth_)),
+		  mask(0), size(size_), depth(depth_), mask_gc(0), copy_gc(0)
+	{
+		create_mask();
+
+		XGCValues values;
+		values.function = GXcopy;
+		values.foreground = 1;
+		values.graphics_exposures = 0;
+		mask_gc = XCreateGC(&display_, mask, GCFunction | GCForeground | GCGraphicsExposures,
+				&values);
+
+		clear_mask();
+
+		values.function = GXcopy;
+		values.foreground = 0;
+		values.clip_mask = mask;
+		values.graphics_exposures = 0;
+		copy_gc = XCreateGC(&display_, window,
+				GCFunction | GCForeground | GCClipMask | GCGraphicsExposures, &values);
+	}
+
+	void x11_output::pixmap_buffer::resize(const point &size_)
+	{
+		XFreePixmap(&display, drawable);
+		XFreePixmap(&display, mask);
+
+		size = size_;
+
+		drawable = XCreatePixmap(&display, window, size.x, size.y, depth);
+		create_mask();
+		clear_mask();
+		XGCValues values;
+		values.clip_mask = mask;
+		XChangeGC(&display, copy_gc, GCClipMask, &values);
+	}
+
 	std::unique_ptr<x11_output::buffer>
-	x11_output::buffer::create(
-			bool double_buffer, Display &display, Window window, point size, unsigned int depth) {
+	x11_output::buffer::create(bool double_buffer, Display &display, Window window,
+							   point size, unsigned int depth) {
 
 		std::unique_ptr<buffer> ret;
 		const char *type;
 
 		if(not double_buffer) {
-			ret.reset(new single_buffer(window));
+			ret.reset(new single_buffer(display, window));
 			type = "single";
 		} else {
 			ret = try_xdbe(display, window);
@@ -414,27 +564,9 @@ namespace conky {
 		return ret;
 	}
 
-#ifdef BUILD_XDBE
-	void x11_output::xdbe_buffer::swap(GC)
-	{
-		XdbeSwapInfo swap;
-
-		swap.swap_window = window;
-		swap.swap_action = XdbeBackground;
-		XdbeSwapBuffers(&display, &swap, 1);
-	}
-#endif /*BUILD_XDBE*/
-
-	void x11_output::pixmap_buffer::swap(GC gc)
-	{
-		XCopyArea(&display, drawable, window, gc, 0, 0, size.x, size.y, 0, 0);
-//		XSetForeground(&display, gc, 0); // XXX
-//		XFillRectangle(&display, drawable, gc, 0, 0, size.x, size.y);
-	}
-
 	x11_output::x11_output(uint32_t period, const std::string &display_)
 		: output_method(period, false), display(NULL), screen(0), root(0),
-		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0), gc(0), fontset(NULL),
+		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0), fontset(NULL),
 		  font_extents(NULL)
 	{
 		// passing NULL to XOpenDisplay should open the default display
@@ -461,8 +593,6 @@ namespace conky {
 		colours.reset();
 		if(fontset)
 			XFreeFontSet(display, fontset);
-		if(gc != 0)
-			XFreeGC(display, gc);
 		drawable.reset();
 		window.reset();
 		XCloseDisplay(display);
@@ -814,19 +944,17 @@ namespace conky {
 	void x11_output::setup_buffer(bool double_buffer)
 	{
 		drawable = buffer::create(double_buffer, *display, *window, window_size, depth);
+		colours = colour_factory::create(*display, *visual, colourmap);
+		fg_colour = colours->get_colour("white");
+		drawable->set_foreground(*fg_colour);
 
-		create_gc();
+		create_fontset();
+
+		XFlush(display);
 	}
 
-	void x11_output::create_gc()
+	void x11_output::create_fontset()
 	{
-		XGCValues values;
-
-		values.graphics_exposures = 0;
-		values.function = GXcopy;
-		gc = XCreateGC(display, drawable->get_drawable(),
-				GCFunction | GCGraphicsExposures, &values);
-
 		char **missing_charset_list;
 		int missing_charset_count;
 		char *def_string;
@@ -844,12 +972,6 @@ namespace conky {
 					charsets.c_str(), def_string);
 		}
 		font_extents = XExtentsOfFontSet(fontset);
-
-		colours = colour_factory::create(*display, *visual, colourmap);
-		fg_colour = colours->get_colour("white");
-		XSetForeground(display, gc, fg_colour->get_pixel());
-
-		XFlush(display);
 	}
 
 	void x11_output::work()
@@ -859,7 +981,7 @@ namespace conky {
 			XResizeWindow(display, *window, size.x, size.y);
 		drawable->resize(size);
 		get_global_text()->draw(*this, point(0, 0), size);
-		drawable->swap(gc);
+		drawable->swap();
 		XFlush(display);
 	}
 
@@ -881,8 +1003,7 @@ namespace conky {
 	void x11_output::draw_text(const std::string &text, const point &p, const point &)
 	{
 		// TODO: clipping ?
-		Xutf8DrawString(display, drawable->get_drawable(), fontset, gc,
-				p.x, p.y - font_extents->max_logical_extent.y, text.c_str(), text.length());
+		drawable->draw_string(fontset, {p.x, p.y - font_extents->max_logical_extent.y }, text);
 	}
 }
 
