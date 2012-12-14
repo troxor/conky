@@ -365,6 +365,31 @@ namespace conky {
 		return std::shared_ptr<x11_output::colour>(new alloc_colour(colour.pixel, *this));
 	}
 
+	class x11_output::window_handler {
+	protected:
+		const Window window;
+
+	public:
+		window_handler(Window window_) : window(window_) { }
+		virtual ~window_handler() { }
+
+		Window get_window() { return window; }
+
+		virtual void resize(point /*size*/) { }
+	};
+
+	class x11_output::own_window_handler: public window_handler {
+		Display &display;
+
+	public:
+		own_window_handler(Display &display_, Window window_)
+			: window_handler(window_), display(display_)
+		{ }
+		~own_window_handler() { XDestroyWindow(&display, window); }
+
+		virtual void resize(point size) { XResizeWindow(&display, window, size.x, size.y); }
+	};
+
 	class x11_output::buffer {
 		static std::unique_ptr<buffer> try_xdbe(Display &display, Window window);
 
@@ -607,18 +632,12 @@ namespace conky {
 		}
 
 		fprintf(stderr, PACKAGE_NAME": drawing to desktop window\n");
-		window.reset(new Window(desktop));
+		window.reset(new root_window_handler(desktop));
 
-		XSelectInput(display, *window, ExposureMask | PropertyChangeMask);
+		XSelectInput(display, window->get_window(), ExposureMask | PropertyChangeMask);
 	}
 
 	void x11_output::create_window(bool override) {
-		struct window_deleter {
-			Display &display;
-			window_deleter(Display &display_) : display(display_) { }
-			void operator ()(Window *window) { XDestroyWindow(&display, *window); delete window; }
-		};
-
 		XSetWindowAttributes attrs = { ParentRelative, 0L, 0, 0L, 0, 0,
 			Always, 0L, 0L, False, StructureNotifyMask | ExposureMask, 0L,
 			override, colourmap, 0 };
@@ -631,9 +650,9 @@ namespace conky {
 
 		Window w = XCreateWindow(display, override ? desktop : root, 0, 0, b, b, 0, depth,
 				InputOutput, visual, flags, &attrs);
-		window.reset(new Window(w), window_deleter(*display));
+		window.reset(new own_window_handler(*display, w));
 
-		XLowerWindow(display, *window);
+		XLowerWindow(display, window->get_window());
 	}
 
 	void x11_output::use_own_window() {
@@ -679,12 +698,12 @@ namespace conky {
 				wmHint.initial_state = NormalState;
 			}
 
-			XmbSetWMProperties(display, *window, NULL, NULL, argv_copy,
+			XmbSetWMProperties(display, window->get_window(), NULL, NULL, argv_copy,
 					argc_copy, NULL, &wmHint, &classHint);
-			XStoreName(display, *window, own_window_title->c_str() );
+			XStoreName(display, window->get_window(), own_window_title->c_str() );
 
 			/* Sets an empty WM_PROTOCOLS property */
-			XSetWMProtocols(display, *window, NULL, 0);
+			XSetWMProtocols(display, window->get_window(), NULL, 0);
 
 			/* Set window type */
 			if ((xa = ATOM(_NET_WM_WINDOW_TYPE)) != None) {
@@ -709,7 +728,7 @@ namespace conky {
 						fprintf(stderr, PACKAGE_NAME": window type - normal\n");
 						break;
 				}
-				XChangeProperty(display, *window, xa, XA_ATOM, 32,
+				XChangeProperty(display, window->get_window(), xa, XA_ATOM, 32,
 						PropModeReplace, (unsigned char *) &prop, 1);
 			}
 
@@ -720,7 +739,7 @@ namespace conky {
 				xa = ATOM(_MOTIF_WM_HINTS);
 				if (xa != None) {
 					long prop[5] = { 2, 0, 0, 0, 0 };
-					XChangeProperty(display, *window, xa, xa, 32,
+					XChangeProperty(display, window->get_window(), xa, xa, 32,
 							PropModeReplace, (unsigned char *) prop, 5);
 				}
 			}
@@ -731,7 +750,7 @@ namespace conky {
 				if (xa != None) {
 					long prop = 0;
 
-					XChangeProperty(display, *window, xa, XA_CARDINAL, 32,
+					XChangeProperty(display, window->get_window(), xa, XA_CARDINAL, 32,
 							PropModeAppend, (unsigned char *) &prop, 1);
 				}
 
@@ -739,7 +758,7 @@ namespace conky {
 				if (xa != None) {
 					Atom xa_prop = ATOM(_NET_WM_STATE_BELOW);
 
-					XChangeProperty(display, *window, xa, XA_ATOM, 32,
+					XChangeProperty(display, window->get_window(), xa, XA_ATOM, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 			}
@@ -750,7 +769,7 @@ namespace conky {
 				if (xa != None) {
 					long prop = 6;
 
-					XChangeProperty(display, *window, xa, XA_CARDINAL, 32,
+					XChangeProperty(display, window->get_window(), xa, XA_CARDINAL, 32,
 							PropModeAppend, (unsigned char *) &prop, 1);
 				}
 
@@ -758,7 +777,7 @@ namespace conky {
 				if (xa != None) {
 					Atom xa_prop = ATOM(_NET_WM_STATE_ABOVE);
 
-					XChangeProperty(display, *window, xa, XA_ATOM, 32,
+					XChangeProperty(display, window->get_window(), xa, XA_ATOM, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 			}
@@ -769,7 +788,7 @@ namespace conky {
 				if (xa != None) {
 					CARD32 xa_prop = 0xFFFFFFFF;
 
-					XChangeProperty(display, *window, xa, XA_CARDINAL, 32,
+					XChangeProperty(display, window->get_window(), xa, XA_CARDINAL, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 
@@ -777,7 +796,7 @@ namespace conky {
 				if (xa != None) {
 					Atom xa_prop = ATOM(_NET_WM_STATE_STICKY);
 
-					XChangeProperty(display, *window, xa, XA_ATOM, 32,
+					XChangeProperty(display, window->get_window(), xa, XA_ATOM, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 			}
@@ -788,7 +807,7 @@ namespace conky {
 				if (xa != None) {
 					Atom xa_prop = ATOM(_NET_WM_STATE_SKIP_TASKBAR);
 
-					XChangeProperty(display, *window, xa, XA_ATOM, 32,
+					XChangeProperty(display, window->get_window(), xa, XA_ATOM, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 			}
@@ -800,16 +819,16 @@ namespace conky {
 				if (xa != None) {
 					Atom xa_prop = ATOM(_NET_WM_STATE_SKIP_PAGER);
 
-					XChangeProperty(display, *window, xa, XA_ATOM, 32,
+					XChangeProperty(display, window->get_window(), xa, XA_ATOM, 32,
 							PropModeAppend, (unsigned char *) &xa_prop, 1);
 				}
 			}
 		}
 
-		fprintf(stderr, PACKAGE_NAME": drawing to created window (0x%lx)\n", *window);
+		fprintf(stderr, PACKAGE_NAME": drawing to created window (0x%lx)\n", window->get_window());
 
-		XMapWindow(display, *window);
-		XSelectInput(display, *window, ExposureMask | PropertyChangeMask | StructureNotifyMask
+		XMapWindow(display, window->get_window());
+		XSelectInput(display, window->get_window(), ExposureMask | PropertyChangeMask | StructureNotifyMask
 				| ButtonPressMask | ButtonReleaseMask );
 	}
 
@@ -943,7 +962,7 @@ namespace conky {
 
 	void x11_output::setup_buffer(bool double_buffer)
 	{
-		drawable = buffer::create(double_buffer, *display, *window, window_size, depth);
+		drawable = buffer::create(double_buffer, *display, window->get_window(), window_size, depth);
 		colours = colour_factory::create(*display, *visual, colourmap);
 		fg_colour = colours->get_colour("white");
 		drawable->set_foreground(*fg_colour);
@@ -977,8 +996,7 @@ namespace conky {
 	void x11_output::work()
 	{
 		point size = get_global_text()->size(*this);
-		if(window)
-			XResizeWindow(display, *window, size.x, size.y);
+		window->resize(size);
 		drawable->resize(size);
 		get_global_text()->draw(*this, point(0, 0), size);
 		drawable->swap();

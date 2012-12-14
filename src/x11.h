@@ -193,6 +193,11 @@ namespace conky {
 			virtual std::shared_ptr<colour> get_colour(XColor &colour);
 		};
 
+		// window classes
+		class window_handler;
+		typedef window_handler root_window_handler;
+		class own_window_handler;
+
 		// (double) buffering classes
 		class buffer;
 		typedef buffer single_buffer;
@@ -207,7 +212,7 @@ namespace conky {
 		int screen;
 		Window root;
 		Window desktop;
-		std::shared_ptr<Window> window;
+		std::unique_ptr<window_handler> window;
 		Visual *visual;
 		int depth;
 		Colormap colourmap;
