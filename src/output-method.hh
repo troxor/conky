@@ -72,6 +72,7 @@ namespace conky {
 			: thread_base(reinterpret_cast<size_t>(this), period, false, use_pipe)
 		{}
 
+		virtual point get_max_extents() const = 0;
 		virtual point get_text_size(const std::u32string &text) const = 0;
 		virtual point get_text_size(const std::string &text) const = 0;
 		virtual void draw_text(const std::u32string &text, const point &p, const point &size) = 0;

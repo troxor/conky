@@ -42,6 +42,8 @@ namespace conky {
 	public:
 		text_output(uint32_t period);
 
+		virtual point get_max_extents() const { return {1, 1}; }
+
 		virtual point get_text_size(const std::u32string &text) const
 		{ return point(text.length(), 1); }
 

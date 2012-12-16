@@ -190,7 +190,7 @@ namespace conky {
 		std::vector<point::type> y_data(item_grid.size(), 0);
 		std::vector<point::type> x_data(item_grid[0].size(), 0);
 
-		point separator = om.get_text_size(U"X");
+		point separator = om.get_max_extents();
 		separator.y /= 2;
 		point res;
 		point::type ypos = 0;

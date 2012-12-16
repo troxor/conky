@@ -221,7 +221,7 @@ namespace conky {
 		std::unique_ptr<buffer> drawable;
 
 		XFontSet fontset;
-		XFontSetExtents *font_extents;
+		const XRectangle *font_extents;
 
 		std::unique_ptr<colour_factory> colours;
 		std::shared_ptr<colour> fg_colour;
@@ -238,6 +238,9 @@ namespace conky {
 	public:
 		x11_output(uint32_t period, const std::string &display_);
 		~x11_output();
+
+		virtual point get_max_extents() const
+		{ return { font_extents->width - font_extents->x, font_extents->height - font_extents->y}; }
 
 		virtual point get_text_size(const std::string &text) const;
 		virtual point get_text_size(const std::u32string &text) const;

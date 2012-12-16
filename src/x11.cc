@@ -1015,7 +1015,7 @@ namespace conky {
 					"Continuing, but missing characters will be replaced by '%s'.",
 					charsets.c_str(), def_string);
 		}
-		font_extents = XExtentsOfFontSet(fontset);
+		font_extents = &(XExtentsOfFontSet(fontset)->max_logical_extent);
 	}
 
 	void x11_output::work()
@@ -1071,8 +1071,7 @@ namespace conky {
 	{
 		XRectangle size;
 		Xutf8TextExtents(fontset, text.c_str(), text.length(), NULL, &size);
-		return { size.width,
-			font_extents->max_logical_extent.height - font_extents->max_logical_extent.y };
+		return { size.width, font_extents->height - font_extents->y };
 
 	}
 
@@ -1082,7 +1081,7 @@ namespace conky {
 	void x11_output::draw_text(const std::string &text, const point &p, const point &)
 	{
 		// TODO: clipping ?
-		drawable->draw_string(fontset, {p.x, p.y - font_extents->max_logical_extent.y }, text);
+		drawable->draw_string(fontset, {p.x, p.y - font_extents->y }, text);
 	}
 }
 
