@@ -1053,15 +1053,22 @@ namespace conky {
 
 	void x11_output::process_events()
 	{
+		point ul = window_size;
+		point lr(0,0);
+
 		while(XPending(display)) {
 			XEvent ev;
 			XNextEvent(display, &ev);
 			switch(ev.type) {
 				case Expose:
 					XExposeEvent &eev = ev.xexpose;
-					drawable->expose(eev.x, eev.y, eev.width, eev.height);
+					ul = min(ul, { eev.x, eev.y });
+					lr = max(lr, { eev.x+eev.width, eev.y+eev.height } );
 			}
 		}
+
+		if(ul.x < lr.x)
+			drawable->expose(ul.x, ul.y, lr.x-ul.x, lr.y-ul.y);
 	}
 
 	point x11_output::get_text_size(const std::u32string &text) const
