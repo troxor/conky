@@ -60,6 +60,12 @@ namespace conky {
 	inline point operator/(const point &l, int32_t r)
 	{ return { l.x/r, l.y/r }; }
 
+	inline bool operator==(const point &l, const point &r)
+	{ return l.x == r.x && l.y == r.y; }
+
+	inline bool operator!=(const point &l, const point &r)
+	{ return not (l == r); }
+
 	class output_method: public thread_base {
 	public:
 		output_method(uint32_t period, bool use_pipe)
