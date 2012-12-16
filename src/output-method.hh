@@ -57,6 +57,9 @@ namespace conky {
 	inline point min(const point &l, const point &r)
 	{ return { std::min(l.x, r.x), std::min(l.y, r.y) }; }
 
+	inline point max(const point &l, const point &r)
+	{ return { std::max(l.x, r.x), std::max(l.y, r.y) }; }
+
 	inline point operator/(const point &l, int32_t r)
 	{ return { l.x/r, l.y/r }; }
 
