@@ -236,6 +236,8 @@ namespace conky {
 		virtual void work();
 
 	public:
+		enum class buffer_type { SINGLE, PIXMAP, XDBE };
+
 		x11_output(uint32_t period, const std::string &display_);
 		~x11_output();
 
@@ -250,7 +252,7 @@ namespace conky {
 		bool set_visual(bool argb);
 		void use_root_window();
 		void use_own_window();
-		void setup_buffer(bool double_buffer);
+		buffer_type setup_buffer(buffer_type type);
 	};
 
 	namespace priv {
@@ -299,17 +301,6 @@ namespace conky {
 			static uint16_t from_lua(lua::state &l, int index, const std::string &description);
 			static void to_lua(lua::state &l, uint16_t t, const std::string &description);
 		};
-
-		class double_buffer_setting: public conky::simple_config_setting<bool> {
-			typedef conky::simple_config_setting<bool> Base;
-
-		public:
-			virtual const bool set(const bool &r, bool init);
-			double_buffer_setting()
-				: Base("double_buffer", false, false)
-			{}
-		};
-
 	} /* namespace conky::priv */
 } /* namespace conky */
 
@@ -362,8 +353,6 @@ extern conky::priv::use_argb_visual_setting      use_argb_visual;
 extern conky::range_config_setting<int>          own_window_argb_value;
 #endif
 extern conky::priv::own_window_setting			 own_window;
-
-extern conky::priv::double_buffer_setting		 double_buffer;
 
 #endif /*X11_H_*/
 #endif /* BUILD_X11 */

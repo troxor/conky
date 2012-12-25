@@ -58,6 +58,50 @@ struct conky_window window;
 
 /********************* <SETTINGS> ************************/
 namespace conky {
+	typedef x11_output::buffer_type buffer_type;
+	template<>
+	conky::lua_traits<buffer_type>::Map conky::lua_traits<buffer_type>::map = {
+		{ "xdbe",   buffer_type::XDBE },
+		{ "pixmap", buffer_type::PIXMAP },
+		{ "single", buffer_type::SINGLE },
+		{ "yes",    buffer_type::XDBE },
+		{ "no",     buffer_type::SINGLE }
+	};
+
+	namespace {
+		class double_buffer_setting: public simple_config_setting<buffer_type> {
+			typedef simple_config_setting<buffer_type> Base;
+
+		protected:
+			virtual std::pair<buffer_type, bool> do_convert(lua::state &l, int index)
+			{
+				if(l.type(index) == lua::TBOOLEAN)
+					return { l.toboolean(index) ? buffer_type::XDBE : buffer_type::SINGLE, true };
+				else
+					return Base::do_convert(l, index);
+			}
+
+
+		public:
+			virtual const buffer_type set(const buffer_type &r, bool init)
+			{
+				assert(init);
+
+				if(*out_to_x) {
+					value = out_to_x.get_om()->setup_buffer(r);
+				} else
+					value = buffer_type::SINGLE;
+
+				return value;
+			}
+
+			double_buffer_setting()
+				: Base("double_buffer", x11_output::buffer_type::XDBE, false)
+			{}
+		};
+
+	} /* anonymous namespace */
+
 	namespace priv {
 		const bool out_to_x_setting::set(const bool &r, bool init)
 		{
@@ -130,19 +174,6 @@ namespace conky {
 				}
 			}
 			l.pushstring(ret);
-		}
-
-		const bool double_buffer_setting::set(const bool &r, bool init)
-		{
-			assert(init);
-
-			if(*out_to_x) {
-				out_to_x.get_om()->setup_buffer(r);
-				value = r;
-			} else
-				value = false;
-
-			return value;
 		}
 	} /* namespace conky::priv */
 } /* namespace conky */
@@ -250,7 +281,7 @@ conky::range_config_setting<int>          own_window_argb_value("own_window_argb
 																0, 255, 255, false);
 #endif
 conky::priv::own_window_setting			  own_window;
-conky::priv::double_buffer_setting	 	  double_buffer;
+conky::double_buffer_setting			  double_buffer;
 
 #ifdef BUILD_IMLIB2
 /*
@@ -411,6 +442,7 @@ namespace conky {
 		virtual ~buffer() { XFreeGC(&display, gc); }
 
 		Drawable get_drawable() { return drawable; }
+		virtual buffer_type get_type() const { return buffer_type::SINGLE; }
 		virtual void clear() { }
 		virtual void swap() { }
 		virtual void resize(const point &/*size*/) { }
@@ -429,7 +461,7 @@ namespace conky {
 		{ return false; }
 
 		static std::unique_ptr<buffer>
-		create(bool double_buffer, Display &display, Window window, point size,
+		create(buffer_type type, Display &display, Window window, point size,
 				unsigned int depth);
 	};
 
@@ -454,6 +486,8 @@ namespace conky {
 
 		virtual ~xdbe_buffer()
 		{ XdbeDeallocateBackBufferName(&display, drawable); }
+
+		virtual buffer_type get_type() const { return buffer_type::XDBE; }
 
 		virtual void swap()
 		{
@@ -495,6 +529,7 @@ namespace conky {
 			return {};
 		}
 #else
+		NORM_ERR("XDBE support disabled during compilation. Will use pixmap buffer instead.");
 		(void) display;
 		(void) window;
 		return {};
@@ -534,6 +569,7 @@ namespace conky {
 			return true;
 		}
 
+		virtual buffer_type get_type() const { return buffer_type::PIXMAP; }
 		virtual void swap() { expose(0, 0, size.x, size.y); }
 
 		virtual void clear()
@@ -592,25 +628,26 @@ namespace conky {
 	}
 
 	std::unique_ptr<x11_output::buffer>
-	x11_output::buffer::create(bool double_buffer, Display &display, Window window,
+	x11_output::buffer::create(buffer_type type, Display &display, Window window,
 							   point size, unsigned int depth) {
 
 		std::unique_ptr<buffer> ret;
-		const char *type;
+		const char *ctype;
 
-		if(not double_buffer) {
+		if(type == buffer_type::SINGLE) {
 			ret.reset(new single_buffer(display, window));
-			type = "single";
+			ctype = "single";
 		} else {
-			ret = try_xdbe(display, window);
+			if(type == buffer_type::XDBE)
+				ret = try_xdbe(display, window);
 			if(ret)
-				type = "XDBE double";
+				ctype = "XDBE double";
 			else {
 				ret.reset(new pixmap_buffer(display, window, size, depth));
-				type = "pixmap double";
+				ctype = "pixmap double";
 			}
 		}
-		fprintf(stderr, PACKAGE_NAME": drawing to %s buffer\n", type);
+		fprintf(stderr, PACKAGE_NAME": drawing to %s buffer\n", ctype);
 		return ret;
 	}
 
@@ -985,9 +1022,9 @@ namespace conky {
 		return false;
 	}
 
-	void x11_output::setup_buffer(bool double_buffer)
+	x11_output::buffer_type x11_output::setup_buffer(buffer_type type)
 	{
-		drawable = buffer::create(double_buffer, *display, window->get_window(), window_size, depth);
+		drawable = buffer::create(type, *display, window->get_window(), window_size, depth);
 		colours = colour_factory::create(*display, *visual, colourmap);
 		fg_colour = colours->get_colour("white");
 		drawable->set_foreground(*fg_colour);
@@ -995,6 +1032,7 @@ namespace conky {
 		create_fontset();
 
 		XFlush(display);
+		return drawable->get_type();
 	}
 
 	void x11_output::create_fontset()

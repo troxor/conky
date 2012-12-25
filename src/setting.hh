@@ -372,6 +372,8 @@ namespace conky {
 				auto r = do_convert(l, -1);
 				if(r.second)
 					set(r.first, init);
+				else
+					set_default(init);
 			}
 		}
 	}
