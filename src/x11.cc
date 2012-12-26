@@ -1070,10 +1070,15 @@ namespace conky {
 				throw errno_error("select", errno);
 			if(is_done())
 				return;
-			process_events();
-			if(FD_ISSET(signalfd(), &set))
+
+			bool need_redraw = false;
+			if(FD_ISSET(signalfd(), &set)) {
 				get_signal();
-			else
+				need_redraw = true;
+			}
+			process_events(need_redraw);
+
+			if(not need_redraw)
 				continue;
 
 			point size = get_global_text()->size(*this);
@@ -1089,7 +1094,7 @@ namespace conky {
 		}
 	}
 
-	void x11_output::process_events()
+	void x11_output::process_events(bool &need_redraw)
 	{
 		point ul = window_size;
 		point lr(0,0);
@@ -1105,8 +1110,8 @@ namespace conky {
 			}
 		}
 
-		if(ul.x < lr.x)
-			drawable->expose(ul.x, ul.y, lr.x-ul.x, lr.y-ul.y);
+		if(!need_redraw and ul.x < lr.x)
+			need_redraw = !drawable->expose(ul.x, ul.y, lr.x-ul.x, lr.y-ul.y);
 	}
 
 	point x11_output::get_text_size(const std::u32string &text) const

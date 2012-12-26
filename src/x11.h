@@ -231,7 +231,7 @@ namespace conky {
 		void create_window(bool override);
 		void create_fontset();
 
-		void process_events();
+		void process_events(bool &need_redraw);
 	protected:
 		virtual void work();
 
