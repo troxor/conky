@@ -415,11 +415,15 @@ namespace conky {
 		virtual void swap() { }
 		virtual void resize(const point &/*size*/) { }
 		void set_foreground(const colour &c) { XSetForeground(&display, gc, c.get_pixel()); }
+
 		virtual void draw_string(XFontSet font_set, const point &pos, const std::string &text)
 		{
 			Xutf8DrawString(&display, drawable, font_set, gc, pos.x, pos.y,
 					text.c_str(), text.length());
 		}
+
+		virtual void start_exposition() { }
+
 		// should return false if we need a full redraw
 		virtual bool expose(short /*x*/, short /*y*/, short /*width*/, short /*height*/)
 		{ return false; }
@@ -517,6 +521,13 @@ namespace conky {
 			XFreeGC(&display, copy_gc);
 		}
 
+		virtual void start_exposition()
+		{
+			XGCValues values;
+			values.clip_mask = mask;
+			XChangeGC(&display, copy_gc, GCClipMask, &values);
+		}
+
 		virtual bool expose(short x, short y, short width, short height)
 		{
 			XCopyArea(&display, drawable, window, copy_gc, x, y, width, height, x, y);
@@ -561,10 +572,9 @@ namespace conky {
 
 		values.function = GXcopy;
 		values.foreground = 0;
-		values.clip_mask = mask;
 		values.graphics_exposures = 0;
 		copy_gc = XCreateGC(&display_, window,
-				GCFunction | GCForeground | GCClipMask | GCGraphicsExposures, &values);
+				GCFunction | GCForeground | GCGraphicsExposures, &values);
 
 		clear();
 	}
@@ -578,9 +588,6 @@ namespace conky {
 
 		drawable = XCreatePixmap(&display, window, size.x, size.y, depth);
 		create_mask();
-		XGCValues values;
-		values.clip_mask = mask;
-		XChangeGC(&display, copy_gc, GCClipMask, &values);
 		clear();
 	}
 
@@ -1039,6 +1046,7 @@ namespace conky {
 			}
 			drawable->clear();
 			get_global_text()->draw(*this, point(0, 0), size);
+			drawable->start_exposition();
 			drawable->swap();
 		}
 	}
