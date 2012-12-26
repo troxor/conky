@@ -707,10 +707,9 @@ namespace conky {
 			attrs.event_mask |= ButtonPressMask | ButtonReleaseMask;
 
 		unsigned long flags = CWBorderPixel | CWColormap | CWOverrideRedirect | CWBackPixel;
-		int b = std::max(*border_inner_margin + *border_width + *border_outer_margin, 1);
-		window_size = { b, b };
+		window_size = { 1, 1 };
 
-		Window w = XCreateWindow(display, override ? desktop : root, 0, 0, b, b, 0, depth,
+		Window w = XCreateWindow(display, override ? desktop : root, 0, 0, 1, 1, 0, depth,
 				InputOutput, visual, flags, &attrs);
 		window.reset(new own_window_handler(*display, w));
 
@@ -1082,13 +1081,15 @@ namespace conky {
 				continue;
 
 			point size = get_global_text()->size(*this);
+			int b = *border_inner_margin + *border_width + *border_outer_margin;
+			size = max(point(1, 1), size + point(2*b, 2*b));
 			if(size != window_size) {
 				window->resize(size);
 				drawable->resize(size);
 				window_size = size;
 			}
 			drawable->clear();
-			get_global_text()->draw(*this, point(0, 0), size);
+			get_global_text()->draw(*this, point(b, b), size - point(b, b));
 			drawable->start_exposition();
 			drawable->swap();
 		}

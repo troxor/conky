@@ -54,6 +54,9 @@ namespace conky {
 	inline point operator-(const point &l, const point &r)
 	{ return { l.x-r.x, l.y-r.y }; }
 
+	inline const point& operator+=(point &l, const point &r)
+	{ l.x += r.x; l.y += r.y; return l; }
+
 	inline point min(const point &l, const point &r)
 	{ return { std::min(l.x, r.x), std::min(l.y, r.y) }; }
 
