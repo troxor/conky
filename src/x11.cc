@@ -283,6 +283,10 @@ conky::range_config_setting<int>          own_window_argb_value("own_window_argb
 conky::priv::own_window_setting			  own_window;
 conky::double_buffer_setting			  double_buffer;
 
+conky::range_config_setting<char>  stippled_borders("stippled_borders", 0,
+											std::numeric_limits<char>::max(), 0, true);
+
+
 #ifdef BUILD_IMLIB2
 /*
  * the only reason this is not in imlib2.cc is so that we can be sure it's setter executes after
@@ -429,6 +433,21 @@ namespace conky {
 		Drawable drawable;
 		GC gc;
 
+		void change_gc(GC gc_, uint64_t value, unsigned long mask)
+		{
+			XGCValues values;
+			switch(mask) {
+				case GCLineWidth: values.line_width = value; break;
+				case GCLineStyle: values.line_style = value; break;
+				case GCDashList:  values.dashes     = value; break;
+				default: assert(false);
+			}
+			XChangeGC(&display, gc_, mask, &values);
+		}
+
+		virtual void change(uint64_t value, unsigned long mask)
+		{ change_gc(gc, value, mask); }
+
 	public:
 		buffer(Display &display_, Drawable drawable_)
 			: display(display_), drawable(drawable_)
@@ -454,12 +473,9 @@ namespace conky {
 					text.c_str(), text.length());
 		}
 
-		virtual void set_line_width(unsigned short width)
-		{
-			XGCValues values;
-			values.line_width = width;
-			XChangeGC(&display, gc, GCLineWidth, &values);
-		}
+		void set_dashes(char dashes) { change(dashes, GCDashList);}
+		void set_line_style(int line_style) { change(line_style, GCLineStyle); }
+		void set_line_width(unsigned short width) { change(width, GCLineWidth); }
 
 		virtual void draw_rectangle(const point &pos, const point &size)
 		{ XDrawRectangle(&display, drawable, gc, pos.x, pos.y, size.x, size.y); }
@@ -555,6 +571,10 @@ namespace conky {
 
 		void create_mask()
 		{ mask = XCreatePixmap(&display, window, size.x, size.y, 1); }
+
+	protected:
+		virtual void change(uint64_t value, unsigned long mask)
+		{ change_gc(gc, value, mask); change_gc(mask_gc, value, mask); }
 
 	public:
 		pixmap_buffer(Display &display_, Window window_, point size_, unsigned int depth_);
@@ -1100,6 +1120,11 @@ namespace conky {
 			}
 			drawable->clear();
 			if(*border_width > 0) {
+				if(*stippled_borders > 0) {
+					drawable->set_dashes(*stippled_borders);
+					drawable->set_line_style(LineOnOffDash);
+				} else
+					drawable->set_line_style(LineSolid);
 				drawable->set_line_width(*border_width);
 				drawable->draw_rectangle(equal_point(*border_outer_margin + *border_width/2),
 						size - equal_point(*border_outer_margin*2+*border_width));

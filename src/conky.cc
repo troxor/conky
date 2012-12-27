@@ -463,9 +463,6 @@ static conky::simple_config_setting<int> gap_y("gap_y", 60, true);
 static conky::simple_config_setting<bool> draw_borders("draw_borders", false, false);
 static conky::simple_config_setting<bool> draw_graph_borders("draw_graph_borders", true, false);
 
-conky::range_config_setting<char>  stippled_borders("stippled_borders", 0,
-											std::numeric_limits<char>::max(), 0, true);
-
 static conky::simple_config_setting<bool> draw_shades("draw_shades", true, false);
 static conky::simple_config_setting<bool> draw_outline("draw_outline", false, false);
 
@@ -1782,30 +1779,6 @@ static void draw_text(void)
 	}
 #endif
 #ifdef BUILD_X11
-	if (*out_to_x) {
-		cur_y = text_start_y;
-		int bw = *border_width;
-
-		/* draw borders */
-		if (*draw_borders && bw > 0) {
-			if (*stippled_borders) {
-				char ss[2] = { *stippled_borders, *stippled_borders };
-				XSetLineAttributes(display, window.gc, bw, LineOnOffDash,
-					CapButt, JoinMiter);
-				XSetDashes(display, window.gc, 0, ss, 2);
-			} else {
-				XSetLineAttributes(display, window.gc, bw, LineSolid,
-					CapButt, JoinMiter);
-			}
-
-			int offset = *border_inner_margin + bw;
-			XDrawRectangle(display, window.drawable, window.gc,
-				text_start_x - offset, text_start_y - offset,
-				text_width + 2*offset, text_height + 2*offset);
-		}
-
-		/* draw text */
-	}
 	setup_fonts();
 #endif /* BUILD_X11 */
 #ifdef BUILD_NCURSES
