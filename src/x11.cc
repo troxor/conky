@@ -454,6 +454,16 @@ namespace conky {
 					text.c_str(), text.length());
 		}
 
+		virtual void set_line_width(unsigned short width)
+		{
+			XGCValues values;
+			values.line_width = width;
+			XChangeGC(&display, gc, GCLineWidth, &values);
+		}
+
+		virtual void draw_rectangle(const point &pos, const point &size)
+		{ XDrawRectangle(&display, drawable, gc, pos.x, pos.y, size.x, size.y); }
+
 		virtual void start_exposition() { }
 
 		// should return false if we need a full redraw
@@ -1082,13 +1092,18 @@ namespace conky {
 
 			point size = get_global_text()->size(*this);
 			int b = *border_inner_margin + *border_width + *border_outer_margin;
-			size = max(point(1, 1), size + point(2*b, 2*b));
+			size = max(equal_point(1), size + equal_point(2*b));
 			if(size != window_size) {
 				window->resize(size);
 				drawable->resize(size);
 				window_size = size;
 			}
 			drawable->clear();
+			if(*border_width > 0) {
+				drawable->set_line_width(*border_width);
+				drawable->draw_rectangle(equal_point(*border_outer_margin + *border_width/2),
+						size - equal_point(*border_outer_margin*2+*border_width));
+			}
 			get_global_text()->draw(*this, point(b, b), size - point(b, b));
 			drawable->start_exposition();
 			drawable->swap();

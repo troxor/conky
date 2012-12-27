@@ -48,6 +48,9 @@ namespace conky {
 		{}
 	};
 
+	inline point equal_point(point::type xy)
+	{ return { xy, xy }; }
+
 	inline point operator+(const point &l, const point &r)
 	{ return { l.x+r.x, l.y+r.y }; }
 
