@@ -97,16 +97,6 @@ namespace conky {
 
 	namespace priv {
 
-		void type_check(lua::state &l, int index, lua::Type type1, lua::Type type2,
-				const std::string &description) {
-			lua::Type t = l.type(index);
-			if(t != type1 && t != type2) {
-				throw conversion_error(std::string("Invalid value of type '") + l.type_name(t)
-						+ "' for " + description + ". Expected value of type '"
-						+ l.type_name(type1) + "'.");
-			}
-		}
-
 		config_setting_base::config_setting_base(const std::string &name_)
 			: name(name_), seq_no(get_next_seq_no())
 		{
@@ -205,6 +195,16 @@ namespace conky {
 			} l.setmetatable(-2);
 			
 			++s;
+		}
+	}
+
+	void type_check(lua::state &l, int index, lua::Type type1, lua::Type type2,
+			const std::string &description) {
+		lua::Type t = l.type(index);
+		if(t != type1 && t != type2) {
+			throw conversion_error(std::string("Invalid value of type '") + l.type_name(t)
+					+ "' for " + description + ". Expected value of type '"
+					+ l.type_name(type1) + "'.");
 		}
 	}
 

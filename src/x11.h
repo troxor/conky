@@ -112,17 +112,24 @@ extern conky::simple_config_setting<alignment>   text_alignment;
 namespace conky {
 
 	class x11_output: public output_method {
+		class true_colour_factory;
+
+	public:
 		class colour {
 		protected:
 			const unsigned long pixel;
 
-		public:
 			explicit colour(unsigned long pixel_) : pixel(pixel_) {}
+
+		public:
 			virtual ~colour() { }
 
 			unsigned long get_pixel() const { return pixel; }
+
+			friend class true_colour_factory;
 		};
 
+	private:
 		class colour_factory {
 		protected:
 			Display &display;
@@ -249,6 +256,9 @@ namespace conky {
 		virtual void draw_text(const std::string &text, const point &p, const point &size);
 		virtual void draw_text(const std::u32string &text, const point &p, const point &size);
 
+		std::shared_ptr<colour> get_colour(const char *name) { return colours->get_colour(name); }
+		XColor get_rgb(const std::shared_ptr<colour> &colour);
+
 		bool set_visual(bool argb);
 		void use_root_window();
 		void use_own_window();
@@ -304,32 +314,8 @@ namespace conky {
 	} /* namespace conky::priv */
 } /* namespace conky */
 
-namespace priv {
-	struct colour_traits {
-		static unsigned long
-		from_lua(lua::state &l, int index, const std::string &);
-
-		static void to_lua(lua::state &l, unsigned long, const std::string &)
-		{ l.pushstring("Operation not supported (yet)"); }
-	};
-
-	class colour_setting: public conky::simple_config_setting<unsigned long, colour_traits> {
-		typedef conky::simple_config_setting<unsigned long, colour_traits> Base;
-	
-	public:
-		colour_setting(const std::string &name_, unsigned long default_value_ = 0)
-			: Base(name_, default_value_, true)
-		{}
-		
-	};
-}
-
 extern conky::simple_config_setting<std::string> display_name;
 extern conky::priv::out_to_x_setting             out_to_x;
-extern priv::colour_setting						 color[10];
-extern priv::colour_setting						 default_color;
-extern priv::colour_setting						 default_shade_color;
-extern priv::colour_setting						 default_outline_color;
 
 extern conky::range_config_setting<int>          border_inner_margin;
 extern conky::range_config_setting<int>          border_outer_margin;

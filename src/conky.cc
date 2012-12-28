@@ -2795,12 +2795,6 @@ void initialisation(int argc, char **argv) {
 
 	conky::set_config_settings(*state);
 
-#ifdef BUILD_X11
-	if(*out_to_x) {
-		current_text_color = *default_color;
-	}
-#endif
-
 	/* fork */
 	if (*fork_to_background && first_pass) {
 		int pid = fork();

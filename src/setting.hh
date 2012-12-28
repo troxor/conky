@@ -84,10 +84,8 @@ namespace conky {
 				|| value >= static_cast<typename std::make_unsigned<Signed2>::type>(min) );
 	}
 
-	namespace priv {
-		void type_check(lua::state &l, int index, lua::Type type1, lua::Type type2,
-				const std::string &description);
-	}
+	void type_check(lua::state &l, int index, lua::Type type1, lua::Type type2,
+			const std::string &description);
 
 	template<typename T,
 		bool is_integral = std::is_integral<T>::value,
@@ -106,7 +104,7 @@ namespace conky {
 		static T
 		from_lua(lua::state &l, int index, const std::string &description)
 		{
-			priv::type_check(l, index, lua::TNUMBER, lua::TSTRING, description);
+			type_check(l, index, lua::TNUMBER, lua::TSTRING, description);
 
 			lua::integer t = l.tointeger(index);
 			if(not between(t, std::numeric_limits<T>::min(), std::numeric_limits<T>::max()))
@@ -130,7 +128,7 @@ namespace conky {
 		static inline T
 		from_lua(lua::state &l, int index, const std::string &description)
 		{
-			priv::type_check(l, index, lua::TNUMBER, lua::TSTRING, description);
+			type_check(l, index, lua::TNUMBER, lua::TSTRING, description);
 
 			return l.tonumber(index);
 		}
@@ -145,7 +143,7 @@ namespace conky {
 		static inline std::string
 		from_lua(lua::state &l, int index, const std::string &description)
 		{
-			priv::type_check(l, index, lua::TSTRING, lua::TSTRING, description);
+			type_check(l, index, lua::TSTRING, lua::TSTRING, description);
 
 			return l.tostring(index);
 		}
@@ -160,7 +158,7 @@ namespace conky {
 		static inline bool
 		from_lua(lua::state &l, int index, const std::string &description)
 		{
-			priv::type_check(l, index, lua::TBOOLEAN, lua::TBOOLEAN, description);
+			type_check(l, index, lua::TBOOLEAN, lua::TBOOLEAN, description);
 
 			return l.toboolean(index);
 		}
@@ -179,7 +177,7 @@ namespace conky {
 		static T
 		from_lua(lua::state &l, int index, const std::string &description)
 		{
-			priv::type_check(l, index, lua::TSTRING, lua::TSTRING, description);
+			type_check(l, index, lua::TSTRING, lua::TSTRING, description);
 
 			const std::string &val = l.tostring(index);
 
@@ -298,6 +296,7 @@ namespace conky {
 		const T& get() { return value; }
 		// set the value of the setting
 		virtual const T set(const T &r, bool /*init*/ = false) { return value = r; }
+		virtual const T set_default(bool init = false) = 0;
 
 		accessor operator*() { return accessor(*this); }
 		const T& operator*() const { return value; }

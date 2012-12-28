@@ -270,9 +270,10 @@ legacy_cb_handle *create_cb_handle(int (*fn)())
 }
 
 /* construct_text_object() creates a new text_object */
-struct text_object *construct_text_object(char *s, const char *arg,
-		long line, void **ifblock_opaque, void *free_at_crash)
+struct text_object *construct_text_object(char * /*s*/, const char * /*arg*/,
+		long /*line*/, void ** /*ifblock_opaque*/, void * /*free_at_crash*/)
 {
+#if 0
 	// struct text_object *obj = new_text_object();
 	struct text_object *obj = new_text_object_internal();
 
@@ -1846,6 +1847,8 @@ struct text_object *construct_text_object(char *s, const char *arg,
 #undef END
 
 	return obj;
+#endif
+	return 0;
 }
 
 /*

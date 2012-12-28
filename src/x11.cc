@@ -100,6 +100,39 @@ namespace conky {
 			{}
 		};
 
+		struct colour_traits {
+			static inline std::shared_ptr<x11_output::colour>
+			from_lua(lua::state &l, int index, const std::string &description)
+			{
+				type_check(l, index, lua::TSTRING, lua::TNUMBER, description);
+
+				return out_to_x.get_om()->get_colour(l.tocstring(index));
+			}
+
+			static inline void
+			to_lua(lua::state &l, const std::shared_ptr<x11_output::colour> &colour,
+					const std::string &)
+			{
+				const XColor &c = out_to_x.get_om()->get_rgb(colour);
+				l.pushstring(strprintf("rgb:%04x/%04x/%04x", c.red, c.green, c.blue));
+			}
+		};
+
+		class colour_setting:
+			public simple_config_setting<std::shared_ptr<x11_output::colour>, colour_traits> {
+
+			typedef simple_config_setting<std::shared_ptr<x11_output::colour>, colour_traits> Base;
+
+			std::string default_name;
+		public:
+			explicit colour_setting(const std::string &name_, const std::string &default_name_)
+				: Base(name_, std::shared_ptr<x11_output::colour>(), true),
+				  default_name(default_name_)
+			{}
+
+			virtual const std::shared_ptr<x11_output::colour> set_default(bool)
+			{ return value = out_to_x.get_om()->get_colour(default_name.c_str()); }
+		};
 	} /* anonymous namespace */
 
 	namespace priv {
@@ -178,14 +211,6 @@ namespace conky {
 	} /* namespace conky::priv */
 } /* namespace conky */
 
-namespace priv {
-	unsigned long colour_traits::from_lua(lua::state &/*l*/, int /*index*/, const std::string &)
-	{
-		return 0;
-//		return *out_to_x ? get_x11_color(l.tostring(index)) : 0;
-	}
-}
-
 template<>
 conky::lua_traits<alignment>::Map conky::lua_traits<alignment>::map = {
 	{ "top_left",      TOP_LEFT },
@@ -236,22 +261,6 @@ conky::simple_config_setting<alignment>   text_alignment("alignment", BOTTOM_LEF
 conky::simple_config_setting<std::string> display_name("display", std::string(), false);
 conky::priv::out_to_x_setting                    out_to_x;
 
-priv::colour_setting					  color[10] = {
-	{ "color0", 0xffffff },
-	{ "color1", 0xffffff },
-	{ "color2", 0xffffff },
-	{ "color3", 0xffffff },
-	{ "color4", 0xffffff },
-	{ "color5", 0xffffff },
-	{ "color6", 0xffffff },
-	{ "color7", 0xffffff },
-	{ "color8", 0xffffff },
-	{ "color9", 0xffffff }
-};
-priv::colour_setting					  default_color("default_color", 0xffffff);
-priv::colour_setting					  default_shade_color("default_shade_color", 0x000000);
-priv::colour_setting					  default_outline_color("default_outline_color", 0x000000);
-
 conky::range_config_setting<int>          border_inner_margin("border_inner_margin", 0,
 													std::numeric_limits<int>::max(), 3, true);
 conky::range_config_setting<int>          border_outer_margin("border_outer_margin", 0,
@@ -273,8 +282,6 @@ conky::simple_config_setting<window_type> own_window_type("own_window_type", TYP
 conky::simple_config_setting<uint16_t, conky::priv::window_hints_traits>
 									      own_window_hints("own_window_hints", 0, false);
 
-priv::colour_setting                      background_colour("own_window_colour", 0);
-
 conky::priv::use_argb_visual_setting      use_argb_visual;
 #ifdef BUILD_ARGB
 conky::range_config_setting<int>          own_window_argb_value("own_window_argb_value",
@@ -285,6 +292,8 @@ conky::double_buffer_setting			  double_buffer;
 
 conky::range_config_setting<char>  stippled_borders("stippled_borders", 0,
 											std::numeric_limits<char>::max(), 0, true);
+
+conky::colour_setting                     background_colour("own_window_colour", "black");
 
 
 #ifdef BUILD_IMLIB2
@@ -1011,6 +1020,14 @@ namespace conky {
 		}
 
 		return win;
+	}
+
+	XColor x11_output::get_rgb(const std::shared_ptr<colour> &colour)
+	{
+		XColor c;
+		c.pixel = colour->get_pixel();
+		XQueryColor(display, colourmap, &c);
+		return c;
 	}
 
 	bool x11_output::set_visual(bool argb)
