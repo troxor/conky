@@ -83,7 +83,6 @@ extern char window_created;
 
 void destroy_window(void);
 void create_gc(void);
-void set_transparent_background(Window win);
 void get_x11_desktop_info(Display *display, Atom atom);
 void set_struts(int);
 
@@ -142,16 +141,16 @@ namespace conky {
 
 			virtual ~colour_factory() { }
 
-			std::shared_ptr<colour> get_colour(const char *name);
+			std::shared_ptr<colour> get_colour(const char *name, uint8_t alpha = 255);
 
 			// One should implement at least one of the following two functions, because the
 			// default implementations just call each other
 			virtual std::shared_ptr<colour>
-			get_colour(uint16_t red, uint16_t green, uint16_t blue);
+			get_colour(uint16_t red, uint16_t green, uint16_t blue, uint8_t alpha = 255);
 
-			virtual std::shared_ptr<colour> get_colour(XColor &colour)
+			virtual std::shared_ptr<colour> get_colour(XColor &colour, uint8_t alpha = 255)
 			{
-				auto t = get_colour(colour.red, colour.green, colour.blue);
+				auto t = get_colour(colour.red, colour.green, colour.blue, alpha);
 				colour.pixel = t->get_pixel();
 				return t;
 			}
@@ -174,7 +173,7 @@ namespace conky {
 			{ }
 
 			virtual std::shared_ptr<colour>
-			get_colour(uint16_t red, uint16_t green, uint16_t blue);
+			get_colour(uint16_t red, uint16_t green, uint16_t blue, uint8_t alpha);
 		};
 
 		class alloc_colour_factory: public colour_factory {
@@ -197,7 +196,7 @@ namespace conky {
 			std::shared_ptr<colour> white;
 		public:
 			alloc_colour_factory(Display &display_, Colormap colourmap_);
-			virtual std::shared_ptr<colour> get_colour(XColor &colour);
+			virtual std::shared_ptr<colour> get_colour(XColor &colour, uint8_t alpha);
 		};
 
 		// window classes
@@ -256,7 +255,9 @@ namespace conky {
 		virtual void draw_text(const std::string &text, const point &p, const point &size);
 		virtual void draw_text(const std::u32string &text, const point &p, const point &size);
 
-		std::shared_ptr<colour> get_colour(const char *name) { return colours->get_colour(name); }
+		std::shared_ptr<colour> get_colour(const char *name, uint8_t alpha = 255)
+		{ return colours->get_colour(name, alpha); }
+
 		XColor get_rgb(const std::shared_ptr<colour> &colour);
 
 		bool set_visual(bool argb);
@@ -333,11 +334,10 @@ extern conky::simple_config_setting<window_type> own_window_type;
 extern conky::simple_config_setting<uint16_t, conky::priv::window_hints_traits> own_window_hints;
 
 extern conky::priv::use_argb_visual_setting      use_argb_visual;
-#ifdef BUILD_ARGB
 
-/* range of 0-255 for alpha */
-extern conky::range_config_setting<int>          own_window_argb_value;
-#endif
+/* range of 0.0-1.0 for alpha */
+extern conky::range_config_setting<float>          own_window_argb_value;
+
 extern conky::priv::own_window_setting			 own_window;
 
 #endif /*X11_H_*/

@@ -29,6 +29,9 @@
  */
 
 #include "config.h"
+
+#include <cmath>
+
 #include "conky.h"
 #include "logging.h"
 #include "common.h"
@@ -46,9 +49,6 @@
 #endif
 
 // XXX: TEMPORARY stub variables
-#ifdef BUILD_ARGB
-bool have_argb_visual;
-#endif /* BUILD_ARGB */
 Display *display;
 int display_width;
 int display_height;
@@ -100,13 +100,14 @@ namespace conky {
 			{}
 		};
 
-		struct colour_traits {
+		struct background_colour_traits {
 			static inline std::shared_ptr<x11_output::colour>
 			from_lua(lua::state &l, int index, const std::string &description)
 			{
 				type_check(l, index, lua::TSTRING, lua::TNUMBER, description);
 
-				return out_to_x.get_om()->get_colour(l.tocstring(index));
+				return out_to_x.get_om()->get_colour(l.tocstring(index),
+											lround(*own_window_argb_value * 255));
 			}
 
 			static inline void
@@ -118,20 +119,25 @@ namespace conky {
 			}
 		};
 
-		class colour_setting:
-			public simple_config_setting<std::shared_ptr<x11_output::colour>, colour_traits> {
+		class background_colour_setting: public simple_config_setting<
+											std::shared_ptr<x11_output::colour>,
+											background_colour_traits> {
 
-			typedef simple_config_setting<std::shared_ptr<x11_output::colour>, colour_traits> Base;
+			typedef simple_config_setting<std::shared_ptr<x11_output::colour>,
+											background_colour_traits> Base;
 
 			std::string default_name;
 		public:
-			explicit colour_setting(const std::string &name_, const std::string &default_name_)
+			background_colour_setting(const std::string &name_, const std::string &default_name_)
 				: Base(name_, std::shared_ptr<x11_output::colour>(), true),
 				  default_name(default_name_)
 			{}
 
 			virtual const std::shared_ptr<x11_output::colour> set_default(bool)
-			{ return value = out_to_x.get_om()->get_colour(default_name.c_str()); }
+			{
+				return value = out_to_x.get_om()->get_colour(default_name.c_str(),
+													lround(*own_window_argb_value * 255));
+			}
 		};
 	} /* anonymous namespace */
 
@@ -282,18 +288,19 @@ conky::simple_config_setting<window_type> own_window_type("own_window_type", TYP
 conky::simple_config_setting<uint16_t, conky::priv::window_hints_traits>
 									      own_window_hints("own_window_hints", 0, false);
 
+
 conky::priv::use_argb_visual_setting      use_argb_visual;
-#ifdef BUILD_ARGB
-conky::range_config_setting<int>          own_window_argb_value("own_window_argb_value",
-																0, 255, 255, false);
-#endif
+conky::range_config_setting<float>        own_window_argb_value("own_window_argb_value",
+																0, 1, 1, false);
+
 conky::priv::own_window_setting			  own_window;
+
 conky::double_buffer_setting			  double_buffer;
 
 conky::range_config_setting<char>  stippled_borders("stippled_borders", 0,
 											std::numeric_limits<char>::max(), 0, true);
 
-conky::colour_setting                     background_colour("own_window_colour", "black");
+conky::background_colour_setting          background_colour("own_window_colour", "black");
 
 
 #ifdef BUILD_IMLIB2
@@ -351,33 +358,36 @@ namespace conky {
 	}
 
 	std::shared_ptr<x11_output::colour>
-	x11_output::colour_factory::get_colour(const char *name)
+	x11_output::colour_factory::get_colour(const char *name, uint8_t alpha)
 	{
 		XColor exact, screen;
 		if(XLookupColor(&display, colourmap, name, &exact, &screen) == 0) {
 			throw new std::runtime_error(
 					std::string("Unable to resolve colour name: `") + name + "'.");
 		}
-		return get_colour(screen);
+		return get_colour(screen, alpha);
 	}
 
 	std::shared_ptr<x11_output::colour>
-	x11_output::colour_factory::get_colour(uint16_t red, uint16_t green, uint16_t blue)
+	x11_output::colour_factory::get_colour(uint16_t red, uint16_t green, uint16_t blue,
+											uint8_t alpha)
 	{
 		XColor colour;
 		colour.red = red;
 		colour.green = green;
 		colour.blue = blue;
-		return get_colour(colour);
+		return get_colour(colour, alpha);
 	}
 
 	std::shared_ptr<x11_output::colour>
-	x11_output::true_colour_factory::get_colour(uint16_t red, uint16_t green, uint16_t blue)
+	x11_output::true_colour_factory::get_colour(uint16_t red, uint16_t green, uint16_t blue,
+												uint8_t alpha)
 	{
 		return std::shared_ptr<colour>(new colour(
 					colour_shift(red, rgb_bits, red_shift) |
 					colour_shift(green, rgb_bits, green_shift) |
-					colour_shift(blue, rgb_bits, blue_shift)
+					colour_shift(blue, rgb_bits, blue_shift) |
+					( *use_argb_visual ? alpha << 24u : 0u )
 		));
 	}
 
@@ -392,7 +402,7 @@ namespace conky {
 	}
 
 	std::shared_ptr<x11_output::colour>
-	x11_output::alloc_colour_factory::get_colour(XColor &colour)
+	x11_output::alloc_colour_factory::get_colour(XColor &colour, uint8_t)
 	{
 		if(XAllocColor(&display, colourmap, &colour) == 0) {
 			static bool warned = false;
@@ -418,21 +428,45 @@ namespace conky {
 		virtual ~window_handler() { }
 
 		Window get_window() { return window; }
-
 		virtual void resize(point /*size*/) { }
+		virtual void set_background() { }
 	};
 
 	class x11_output::own_window_handler: public window_handler {
 		Display &display;
+		const int screen;
 
 	public:
-		own_window_handler(Display &display_, Window window_)
-			: window_handler(window_), display(display_)
+		own_window_handler(Display &display_, int screen_, Window window_)
+			: window_handler(window_), display(display_), screen(screen_)
 		{ }
 		~own_window_handler() { XDestroyWindow(&display, window); }
 
 		virtual void resize(point size) { XResizeWindow(&display, window, size.x, size.y); }
+
+		virtual void set_background();
 	};
+
+	/* if no argb visual is configured sets background to ParentRelative for the Window and all
+	 * parents, else real transparency is used */
+	void x11_output::own_window_handler::set_background()
+	{
+		if(*use_argb_visual or *own_window_argb_value > 1e-3f)
+			XSetWindowBackground(&display, window, background_colour->get()->get_pixel());
+		else {
+			Window parent = window;
+
+			for (int i = 0; i < 50 && parent != RootWindow(&display, screen); i++) {
+				Window r, *children;
+				unsigned int n;
+
+				XSetWindowBackgroundPixmap(&display, parent, ParentRelative);
+
+				XQueryTree(&display, parent, &r, &parent, &children, &n);
+				XFree(children);
+			}
+		}
+	}
 
 	class x11_output::buffer {
 		static std::unique_ptr<buffer> try_xdbe(Display &display, Window window);
@@ -750,7 +784,7 @@ namespace conky {
 
 		Window w = XCreateWindow(display, override ? desktop : root, 0, 0, 1, 1, 0, depth,
 				InputOutput, visual, flags, &attrs);
-		window.reset(new own_window_handler(*display, w));
+		window.reset(new own_window_handler(*display, screen, w));
 
 		XLowerWindow(display, window->get_window());
 	}
@@ -1032,7 +1066,7 @@ namespace conky {
 
 	bool x11_output::set_visual(bool argb)
 	{
-		if(argb && *own_window) {
+		if(argb) {
 			/* code from gtk project, gdk_screen_get_rgba_visual */
 			XVisualInfo visual_template;
 			XVisualInfo *visual_list;
@@ -1132,6 +1166,7 @@ namespace conky {
 			size = max(equal_point(1), size + equal_point(2*b));
 			if(size != window_size) {
 				window->resize(size);
+				window->set_background();
 				drawable->resize(size);
 				window_size = size;
 			}
@@ -1193,49 +1228,6 @@ namespace conky {
 	}
 }
 
-#ifdef OWN_WINDOW
-namespace {
-	/* helper function for set_transparent_background() */
-	void do_set_background(Window win, int argb)
-	{
-		unsigned long colour = *background_colour | (argb<<24);
-		XSetWindowBackground(display, win, colour);
-	}
-}
-
-/* if no argb visual is configured sets background to ParentRelative for the Window and all parents,
-   else real transparency is used */
-void set_transparent_background(Window win)
-{
-#ifdef BUILD_ARGB
-	if (have_argb_visual) {
-		// real transparency
-		do_set_background(win, *set_transparent ? 0 : *own_window_argb_value);
-	} else {
-#endif /* BUILD_ARGB */
-	// pseudo transparency
-	
-	if (*set_transparent) {
-		Window parent = win;
-		unsigned int i;
-
-		for (i = 0; i < 50 && parent != RootWindow(display, screen); i++) {
-			Window r, *children;
-			unsigned int n;
-
-			XSetWindowBackgroundPixmap(display, parent, ParentRelative);
-
-			XQueryTree(display, parent, &r, &parent, &children, &n);
-			XFree(children);
-		}
-	} else
-		do_set_background(win, 0);
-#ifdef BUILD_ARGB
-	}
-#endif /* BUILD_ARGB */
-}
-#endif
-
 void destroy_window(void)
 {
 #ifdef BUILD_XFT
@@ -1243,7 +1235,6 @@ void destroy_window(void)
 		XftDrawDestroy(window.xftdraw);
 	}
 #endif /* BUILD_XFT */
-	memset(&window, 0, sizeof(struct conky_window));
 }
 
 //Get current desktop number
