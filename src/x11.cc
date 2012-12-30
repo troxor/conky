@@ -421,28 +421,42 @@ namespace conky {
 
 	class x11_output::window_handler {
 	protected:
+		Display &display;
 		const Window window;
 
 	public:
-		window_handler(Window window_) : window(window_) { }
+		window_handler(Display &display_, Window window_) : display(display_), window(window_) { }
 		virtual ~window_handler() { }
 
 		Window get_window() { return window; }
-		virtual void resize(point /*size*/) { }
+		virtual void resize(point size) = 0;
+		virtual void clear() = 0;
 		virtual void set_background() { }
 	};
 
+	class x11_output::root_window_handler: public window_handler {
+		point size;
+
+	public:
+		root_window_handler(Display &display_, Window window_)
+			: window_handler(display_, window_)
+		{ }
+
+		virtual void resize(point size_) { size = size_; }
+		virtual void clear() { XClearArea(&display, window, 0, 0, size.x, size.y, False); }
+	};
+
 	class x11_output::own_window_handler: public window_handler {
-		Display &display;
 		const int screen;
 
 	public:
 		own_window_handler(Display &display_, int screen_, Window window_)
-			: window_handler(window_), display(display_), screen(screen_)
+			: window_handler(display_, window_), screen(screen_)
 		{ }
 		~own_window_handler() { XDestroyWindow(&display, window); }
 
 		virtual void resize(point size) { XResizeWindow(&display, window, size.x, size.y); }
+		virtual void clear() { XClearWindow(&display, window); }
 
 		virtual void set_background();
 	};
@@ -469,10 +483,11 @@ namespace conky {
 	}
 
 	class x11_output::buffer {
-		static std::unique_ptr<buffer> try_xdbe(Display &display, Window window);
+		static std::unique_ptr<buffer> try_xdbe(Display &display, window_handler &window);
 
 	protected:
 		Display &display;
+		window_handler &window;
 		Drawable drawable;
 		GC gc;
 
@@ -488,12 +503,11 @@ namespace conky {
 			XChangeGC(&display, gc_, mask, &values);
 		}
 
-		virtual void change(uint64_t value, unsigned long mask)
+		void change(uint64_t value, unsigned long mask)
 		{ change_gc(gc, value, mask); }
 
-	public:
-		buffer(Display &display_, Drawable drawable_)
-			: display(display_), drawable(drawable_)
+		buffer(Display &display_, window_handler &window_, Drawable drawable_)
+			: display(display_), window(window_), drawable(drawable_)
 		{
 			XGCValues values;
 			values.graphics_exposures = 0;
@@ -501,16 +515,21 @@ namespace conky {
 			gc = XCreateGC(&display, drawable, GCFunction | GCGraphicsExposures, &values);
 		}
 
+	public:
 		virtual ~buffer() { XFreeGC(&display, gc); }
 
 		Drawable get_drawable() { return drawable; }
-		virtual buffer_type get_type() const { return buffer_type::SINGLE; }
-		virtual void clear() { }
-		virtual void swap() { }
-		virtual void resize(const point &/*size*/) { }
+		virtual buffer_type get_type() const = 0;
+		virtual void clear() = 0;
+		virtual void swap() = 0;
+		virtual void resize(const point &size) { window.resize(size); }
+
+		// should return false if we need a full redraw
+		virtual bool expose(short x, short y, short width, short height) = 0;
+
 		void set_foreground(const colour &c) { XSetForeground(&display, gc, c.get_pixel()); }
 
-		virtual void draw_string(XFontSet font_set, const point &pos, const std::string &text)
+		void draw_string(XFontSet font_set, const point &pos, const std::string &text)
 		{
 			Xutf8DrawString(&display, drawable, font_set, gc, pos.x, pos.y,
 					text.c_str(), text.length());
@@ -520,38 +539,34 @@ namespace conky {
 		void set_line_style(int line_style) { change(line_style, GCLineStyle); }
 		void set_line_width(unsigned short width) { change(width, GCLineWidth); }
 
-		virtual void draw_rectangle(const point &pos, const point &size)
+		void draw_rectangle(const point &pos, const point &size)
 		{ XDrawRectangle(&display, drawable, gc, pos.x, pos.y, size.x, size.y); }
 
-		virtual void start_exposition() { }
-
-		// should return false if we need a full redraw
-		virtual bool expose(short /*x*/, short /*y*/, short /*width*/, short /*height*/)
-		{ return false; }
-
 		static std::unique_ptr<buffer>
-		create(buffer_type type, Display &display, Window window, point size,
+		create(buffer_type type, Display &display, window_handler &window, point size,
 				unsigned int depth);
 	};
 
-	class x11_output::double_buffer: public buffer {
-	protected:
-		const Window window;
-
+	class x11_output::single_buffer: public buffer {
 	public:
-		double_buffer(Display &display_, Window window_, Drawable drawable_)
-			: buffer(display_, drawable_), window(window_)
+		single_buffer(Display &display_, window_handler& window_)
+			: buffer(display_, window_, window_.get_window())
 		{ }
+
+		virtual buffer_type get_type() const { return buffer_type::SINGLE; }
+		virtual void clear() { window.clear(); }
+		virtual void swap() { }
+		virtual bool expose(short, short, short, short) { return false; }
 	};
 
 #ifdef BUILD_XDBE
-	class x11_output::xdbe_buffer: public double_buffer {
+	class x11_output::xdbe_buffer: public buffer {
 		XdbeSwapInfo swapinfo;
 
 	public:
-		xdbe_buffer(Display &display_, Window window_, XdbeBackBuffer back_buffer)
-			: double_buffer(display_, window_, back_buffer)
-		{ swapinfo.swap_window = window; }
+		xdbe_buffer(Display &display_, window_handler& window_, XdbeBackBuffer back_buffer)
+			: buffer(display_, window_, back_buffer)
+		{ swapinfo.swap_window = window.get_window(); }
 
 		virtual ~xdbe_buffer()
 		{ XdbeDeallocateBackBufferName(&display, drawable); }
@@ -572,14 +587,14 @@ namespace conky {
 
 		virtual bool expose(short x, short y, short width, short height)
 		{
-			XCopyArea(&display, drawable, window, gc, x, y, width, height, x, y);
+			XCopyArea(&display, drawable, window.get_window(), gc, x, y, width, height, x, y);
 			return true;
 		}
 	};
 #endif /*BUILD_XDBE*/
 
 	std::unique_ptr<x11_output::buffer>
-	x11_output::buffer::try_xdbe(Display &display, Window window)
+	x11_output::buffer::try_xdbe(Display &display, window_handler &window)
 	{
 #ifdef BUILD_XDBE
 		int major, minor;
@@ -590,7 +605,7 @@ namespace conky {
 		}
 
 		XdbeBackBuffer back_buffer = XdbeAllocateBackBufferName(&display,
-				window, XdbeBackground);
+				window.get_window(), XdbeBackground);
 		if (back_buffer != None)
 			return std::unique_ptr<buffer>(new xdbe_buffer(display, window, back_buffer));
 		else {
@@ -605,40 +620,36 @@ namespace conky {
 #endif
 	}
 
-	class x11_output::pixmap_buffer: public double_buffer {
-		Pixmap mask;
+	class x11_output::pixmap_buffer: public buffer {
 		point size;
 		unsigned int depth;
-		GC mask_gc;
+		Pixmap background;
 		GC copy_gc;
 
-		void create_mask()
-		{ mask = XCreatePixmap(&display, window, size.x, size.y, 1); }
+		Pixmap create_pixmap()
+		{ return XCreatePixmap(&display, window.get_window(), size.x, size.y, depth); }
 
-	protected:
-		virtual void change(uint64_t value, unsigned long mask)
-		{ change_gc(gc, value, mask); change_gc(mask_gc, value, mask); }
+		void semi_clear()
+		{
+			window.clear();
+			XCopyArea(&display, window.get_window(), background, copy_gc,
+					0, 0, size.x, size.y, 0, 0);
+			std::swap(drawable, background);
+		}
 
 	public:
-		pixmap_buffer(Display &display_, Window window_, point size_, unsigned int depth_);
+		pixmap_buffer(Display &display_, window_handler &window_, point size_, unsigned int depth_);
 
 		virtual ~pixmap_buffer()
 		{
 			XFreePixmap(&display, drawable);
-			XFreeGC(&display, mask_gc);
+			XFreePixmap(&display, background);
 			XFreeGC(&display, copy_gc);
-		}
-
-		virtual void start_exposition()
-		{
-			XGCValues values;
-			values.clip_mask = mask;
-			XChangeGC(&display, copy_gc, GCClipMask, &values);
 		}
 
 		virtual bool expose(short x, short y, short width, short height)
 		{
-			XCopyArea(&display, drawable, window, copy_gc, x, y, width, height, x, y);
+			XCopyArea(&display, drawable, window.get_window(), copy_gc, x, y, width, height, x, y);
 			return true;
 		}
 
@@ -647,61 +658,46 @@ namespace conky {
 
 		virtual void clear()
 		{
-			XSetForeground(&display, mask_gc, 0);
-			XFillRectangle(&display, mask, mask_gc, 0, 0, size.x, size.y);
-			XSetForeground(&display, mask_gc, 1);
-			XFillRectangle(&display, drawable, copy_gc, 0, 0, size.x, size.y);
+			semi_clear();
+			XCopyArea(&display, background, window.get_window(), copy_gc,
+					0, 0, size.x, size.y, 0, 0);
 		}
 
 		virtual void resize(const point &size_);
-
-		virtual void draw_string(XFontSet font_set, const point &pos, const std::string &text)
-		{
-			buffer::draw_string(font_set, pos, text);
-
-			Xutf8DrawString(&display, mask, font_set, mask_gc, pos.x, pos.y,
-					text.c_str(), text.length());
-		}
 	};
 
-	x11_output::pixmap_buffer::pixmap_buffer(Display &display_, Window window_,
+	x11_output::pixmap_buffer::pixmap_buffer(Display &display_, window_handler &window_,
 											 point size_, unsigned int depth_)
-		: double_buffer(display_, window_,
-				XCreatePixmap(&display_, window_, size_.x, size_.y, depth_)),
-		  mask(0), size(size_), depth(depth_), mask_gc(0), copy_gc(0)
+		: buffer(display_, window_,
+				XCreatePixmap(&display_, window_.get_window(), size_.x, size_.y, depth_)),
+		  size(size_), depth(depth_)
 	{
-		create_mask();
+		drawable = create_pixmap();
+		background = create_pixmap();
 
 		XGCValues values;
 		values.function = GXcopy;
-		values.foreground = 1;
 		values.graphics_exposures = 0;
-		mask_gc = XCreateGC(&display_, mask, GCFunction | GCForeground | GCGraphicsExposures,
-				&values);
+		copy_gc = XCreateGC(&display_, window.get_window(),
+				GCFunction | GCGraphicsExposures, &values);
 
-		values.function = GXcopy;
-		values.foreground = 0;
-		values.graphics_exposures = 0;
-		copy_gc = XCreateGC(&display_, window,
-				GCFunction | GCForeground | GCGraphicsExposures, &values);
-
-		clear();
+		semi_clear();
 	}
 
 	void x11_output::pixmap_buffer::resize(const point &size_)
 	{
 		XFreePixmap(&display, drawable);
-		XFreePixmap(&display, mask);
+		XFreePixmap(&display, background );
 
 		size = size_;
 
-		drawable = XCreatePixmap(&display, window, size.x, size.y, depth);
-		create_mask();
-		clear();
+		drawable = create_pixmap();
+		background = create_pixmap();
+		semi_clear();
 	}
 
 	std::unique_ptr<x11_output::buffer>
-	x11_output::buffer::create(buffer_type type, Display &display, Window window,
+	x11_output::buffer::create(buffer_type type, Display &display, window_handler &window,
 							   point size, unsigned int depth) {
 
 		std::unique_ptr<buffer> ret;
@@ -767,7 +763,7 @@ namespace conky {
 		}
 
 		fprintf(stderr, PACKAGE_NAME": drawing to desktop window\n");
-		window.reset(new root_window_handler(desktop));
+		window.reset(new root_window_handler(*display, desktop));
 
 		XSelectInput(display, window->get_window(), ExposureMask | PropertyChangeMask);
 	}
@@ -1104,7 +1100,7 @@ namespace conky {
 
 	x11_output::buffer_type x11_output::setup_buffer(buffer_type type)
 	{
-		drawable = buffer::create(type, *display, window->get_window(), window_size, depth);
+		drawable = buffer::create(type, *display, *window, window_size, depth);
 		colours = colour_factory::create(*display, *visual, colourmap);
 		fg_colour = colours->get_colour("white");
 		drawable->set_foreground(*fg_colour);
@@ -1182,7 +1178,6 @@ namespace conky {
 						size - equal_point(*border_outer_margin*2+*border_width));
 			}
 			get_global_text()->draw(*this, point(b, b), size - point(b, b));
-			drawable->start_exposition();
 			drawable->swap();
 		}
 	}

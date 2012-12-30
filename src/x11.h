@@ -201,13 +201,12 @@ namespace conky {
 
 		// window classes
 		class window_handler;
-		typedef window_handler root_window_handler;
+		class root_window_handler;
 		class own_window_handler;
 
 		// (double) buffering classes
 		class buffer;
-		typedef buffer single_buffer;
-		class double_buffer;
+		class single_buffer;
 		class xdbe_buffer;
 		class pixmap_buffer;
 
