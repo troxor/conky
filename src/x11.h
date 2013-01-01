@@ -210,6 +210,12 @@ namespace conky {
 		class xdbe_buffer;
 		class pixmap_buffer;
 
+		// font classes
+		class font;
+		class font_factory;
+		class xlib_font_factory;
+		class xft_font_factory;
+
 		unicode_converter conv;
 
 		Display *display;
@@ -225,8 +231,8 @@ namespace conky {
 		point position;
 		std::unique_ptr<buffer> drawable;
 
-		XFontSet fontset;
-		const XRectangle *font_extents;
+		std::unique_ptr<font_factory> fonts;
+		std::shared_ptr<font> current_font;
 
 		std::unique_ptr<colour_factory> colours;
 		std::shared_ptr<colour> fg_colour;
@@ -234,7 +240,6 @@ namespace conky {
 		Window find_subwindow(Window win);
 		void find_root_and_desktop_window();
 		void create_window(bool override);
-		void create_fontset();
 
 		void process_events(bool &need_redraw);
 
@@ -249,8 +254,7 @@ namespace conky {
 		x11_output(uint32_t period, const std::string &display_);
 		~x11_output();
 
-		virtual point get_max_extents() const
-		{ return { font_extents->width - font_extents->x, font_extents->height - font_extents->y}; }
+		virtual point get_max_extents() const;
 
 		virtual point get_text_size(const std::string &text) const;
 		virtual point get_text_size(const std::u32string &text) const;
@@ -267,6 +271,7 @@ namespace conky {
 		{ if(own) use_own_window(); else use_root_window(); return own; }
 
 		buffer_type setup_buffer(buffer_type type);
+		bool setup_fonts(bool xft);
 	};
 
 	namespace priv {
@@ -303,10 +308,6 @@ namespace conky {
 	extern range_config_setting<int>          border_inner_margin;
 	extern range_config_setting<int>          border_outer_margin;
 	extern range_config_setting<int>          border_width;
-
-#ifdef BUILD_XFT
-	extern simple_config_setting<bool>        use_xft;
-#endif
 
 	extern simple_config_setting<bool>        set_transparent;
 	extern simple_config_setting<std::string> own_window_class;

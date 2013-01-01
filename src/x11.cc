@@ -257,9 +257,6 @@ namespace conky {
 														std::numeric_limits<int>::max(), 1, true);
 	range_config_setting<int>          border_width("border_width", 0,
 														std::numeric_limits<int>::max(), 1, true);
-#ifdef BUILD_XFT
-	simple_config_setting<bool>        use_xft("use_xft", false, false);
-#endif
 
 	simple_config_setting<bool>        set_transparent("own_window_transparent", false, false);
 	simple_config_setting<std::string> own_window_class("own_window_class",
@@ -281,6 +278,8 @@ namespace conky {
 	fancy_x11_setting<bool>			   own_window("own_window", true, &x11_output::setup_window);
 
 	double_buffer_setting			   double_buffer;
+
+    fancy_x11_setting<bool>            use_xft("use_xft", false, &x11_output::setup_fonts);
 
 	range_config_setting<char>		   stippled_borders("stippled_borders", 0,
 												std::numeric_limits<char>::max(), 0, true);
@@ -505,6 +504,7 @@ namespace conky {
 		virtual ~buffer() { XFreeGC(&display, gc); }
 
 		Drawable get_drawable() { return drawable; }
+		GC get_gc() { return gc; }
 		virtual buffer_type get_type() const = 0;
 		virtual void clear() = 0;
 		virtual void swap() = 0;
@@ -514,12 +514,6 @@ namespace conky {
 		virtual bool expose(short x, short y, short width, short height) = 0;
 
 		void set_foreground(const colour &c) { XSetForeground(&display, gc, c.get_pixel()); }
-
-		void draw_string(XFontSet font_set, const point &pos, const std::string &text)
-		{
-			Xutf8DrawString(&display, drawable, font_set, gc, pos.x, pos.y,
-					text.c_str(), text.length());
-		}
 
 		void set_dashes(char dashes) { change(dashes, GCDashList);}
 		void set_line_style(int line_style) { change(line_style, GCLineStyle); }
@@ -706,10 +700,126 @@ namespace conky {
 		return ret;
 	}
 
+	class x11_output::font {
+	protected:
+		Display &display;
+
+		font(Display &display_) : display(display_) { }
+	public:
+		virtual ~font() { }
+
+		virtual point get_max_extents() = 0;
+		virtual point get_text_size(const std::string &text) = 0;
+
+		virtual void
+		draw_text(buffer &drawable, const std::string &text,
+				const point &pos, const point &size) = 0;
+	};
+
+	class x11_output::font_factory {
+	protected:
+		Display &display;
+
+		font_factory(Display &display_) : display(display_) { }
+
+	public:
+		virtual ~font_factory() { }
+		virtual std::shared_ptr<font> get_font(const char *name) = 0;
+		virtual std::shared_ptr<font> get_default_font() = 0;
+	};
+
+	class x11_output::xlib_font_factory: public font_factory {
+		class load_font_error: public std::runtime_error {
+		public:
+			load_font_error(const std::string &message) : std::runtime_error(message) { }
+		};
+
+		class xlib_font: public font {
+			XFontSet fontset;
+			const XRectangle *font_extents;
+
+		public:
+			xlib_font(Display &display_, const char *name);
+			virtual ~xlib_font() { XFreeFontSet(&display, fontset); }
+
+			virtual point get_max_extents()
+			{
+				return { font_extents->width - font_extents->x,
+						font_extents->height - font_extents->y};
+			}
+
+			virtual point get_text_size(const std::string &text)
+			{
+				XRectangle size;
+				Xutf8TextExtents(fontset, text.c_str(), text.length(), NULL, &size);
+				return { size.width, font_extents->height - font_extents->y };
+			}
+
+			virtual void
+			draw_text(buffer &drawable, const std::string &text, const point &pos, const point &)
+			{
+				// TODO: clipping ?
+				Xutf8DrawString(&display, drawable.get_drawable(), fontset, drawable.get_gc(),
+						pos.x, pos.y, text.c_str(), text.length());
+			}
+		};
+
+	public:
+		xlib_font_factory(Display &display_) : font_factory(display_) { }
+
+		virtual std::shared_ptr<font> get_font(const char *name)
+		{
+			try {
+				return std::shared_ptr<font>(new xlib_font(display, name));
+			}
+			catch(load_font_error &e) {
+				NORM_ERR("%s Loading default font instead.", e.what());
+				return get_default_font();
+			}
+		}
+
+		virtual std::shared_ptr<font> get_default_font()
+		{ return std::shared_ptr<font>(new xlib_font(display, "fixed")); }
+	};
+
+	x11_output::xlib_font_factory::xlib_font::xlib_font(Display &display_, const char *name)
+		: font(display_)
+	{
+		char **missing_charset_list;
+		int missing_charset_count;
+		char *def_string;
+		fontset = XCreateFontSet(&display, name, &missing_charset_list,
+				&missing_charset_count, &def_string);
+		if(fontset == None) {
+			throw load_font_error(std::string("Unable to create font set for font '") +
+					name + "'.");
+		}
+		if(missing_charset_count > 0) {
+			std::string charsets = '\'' + std::string(missing_charset_list[0]) + '\'';
+			for(int i = 1; i < missing_charset_count; ++i)
+				charsets += std::string(", '") + missing_charset_list[i] + '\'';
+			XFreeStringList(missing_charset_list);
+			NORM_ERR("Unable to load some character sets (%s) for font '%s'. "
+					"Continuing, but missing characters will be replaced by '%s'.",
+					charsets.c_str(), name, def_string);
+		}
+		font_extents = &(XExtentsOfFontSet(fontset)->max_logical_extent);
+	}
+
+#ifdef BUILD_XFT
+	class x11_output::xft_font: public font {
+	public:
+		xft_font(Display &display_, const char *name)
+			: font(display_)
+		{
+		}
+	};
+#endif /* BUILD_XFT */
+
 	x11_output::x11_output(uint32_t period, const std::string &display_)
 		: output_method(period, true), display(NULL), screen(0), root(0),
-		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0), fontset(NULL),
-		  font_extents(NULL)
+  		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0)
+
 	{
 		// passing NULL to XOpenDisplay should open the default display
 		const char *disp = display_.size() ? display_.c_str() : NULL;
@@ -733,8 +843,7 @@ namespace conky {
 	{
 		fg_colour.reset();
 		colours.reset();
-		if(fontset)
-			XFreeFontSet(display, fontset);
+		current_font.reset();
 		drawable.reset();
 		window.reset();
 		XCloseDisplay(display);
@@ -1090,32 +1199,28 @@ namespace conky {
 		colours = colour_factory::create(*display, *visual, colourmap);
 		fg_colour = colours->get_colour("white");
 		drawable->set_foreground(*fg_colour);
-
-		create_fontset();
-
-		XFlush(display);
 		return drawable->get_type();
 	}
 
-	void x11_output::create_fontset()
+	bool x11_output::setup_fonts(bool xft)
 	{
-		char **missing_charset_list;
-		int missing_charset_count;
-		char *def_string;
-		fontset = XCreateFontSet(display, "fixed", &missing_charset_list,
-				&missing_charset_count, &def_string);
-		if(fontset == NULL)
-			throw std::runtime_error("Unable to create font set for font 'fixed'.");
-		if(missing_charset_count > 0) {
-			std::string charsets = '\'' + std::string(missing_charset_list[0]) + '\'';
-			for(int i = 1; i < missing_charset_count; ++i)
-				charsets += std::string(", '") + missing_charset_list[i] + '\'';
-			XFreeStringList(missing_charset_list);
-			NORM_ERR("Unable to load some character sets (%s) for font 'fixed'. "
-					"Continuing, but missing characters will be replaced by '%s'.",
-					charsets.c_str(), def_string);
+		if(xft) {
+#ifdef BUILD_XFT
+			fonts = std::unique_ptr<font_factory>(new xft_font_factory(*display));
+#else
+			NORM_ERR("Support for Xft fonts disabled during compilation. "
+					"Will use xlib font API instead.");
+#endif
 		}
-		font_extents = &(XExtentsOfFontSet(fontset)->max_logical_extent);
+		if(not fonts) {
+			fonts = std::unique_ptr<font_factory>(new xlib_font_factory(*display));
+			xft = false;
+		}
+
+		current_font = fonts->get_default_font();
+
+		XFlush(display);
+		return xft;
 	}
 
 	void x11_output::work()
@@ -1188,25 +1293,20 @@ namespace conky {
 			need_redraw = !drawable->expose(ul.x, ul.y, lr.x-ul.x, lr.y-ul.y);
 	}
 
+	point x11_output::get_max_extents() const
+	{ return current_font->get_max_extents(); }
+
 	point x11_output::get_text_size(const std::u32string &text) const
 	{ return get_text_size(conv.to_utf8(text)); }
 
 	point x11_output::get_text_size(const std::string &text) const
-	{
-		XRectangle size;
-		Xutf8TextExtents(fontset, text.c_str(), text.length(), NULL, &size);
-		return { size.width, font_extents->height - font_extents->y };
-
-	}
+	{ return current_font->get_text_size(text); }
 
 	void x11_output::draw_text(const std::u32string &text, const point &p, const point &size)
 	{ draw_text(conv.to_utf8(text), p, size); }
 
-	void x11_output::draw_text(const std::string &text, const point &p, const point &)
-	{
-		// TODO: clipping ?
-		drawable->draw_string(fontset, {p.x, p.y - font_extents->y }, text);
-	}
+	void x11_output::draw_text(const std::string &text, const point &p, const point &size)
+	{ current_font->draw_text(*drawable, text, p, size); }
 }
 
 void destroy_window(void)
