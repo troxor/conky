@@ -2481,9 +2481,9 @@ static void set_default_configurations(void)
 #endif /* BUILD_XMMS2 */
 	state->pushboolean(true);
 #ifdef BUILD_X11
-	out_to_x.lua_set(*state);
+	conky::out_to_x.lua_set(*state);
 #else
-	out_to_stdout.lua_set(*state);
+	conky::out_to_stdout.lua_set(*state);
 #endif
 
 	info.users.number = 1;

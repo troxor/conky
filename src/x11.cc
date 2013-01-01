@@ -69,8 +69,33 @@ namespace conky {
 	};
 
 	namespace {
-		class double_buffer_setting: public simple_config_setting<buffer_type> {
-			typedef simple_config_setting<buffer_type> Base;
+		template<typename T>
+		class fancy_x11_setting: public simple_config_setting<T> {
+			typedef simple_config_setting<T> Base;
+			typedef T (x11_output::*Fun)(T);
+
+			Fun fun;
+
+		public:
+			fancy_x11_setting(const char *name_, const T &default_value_, Fun fun_)
+				: Base(name_, default_value_, false), fun(fun_)
+			{ }
+
+			virtual const T set(const T &r, bool init)
+			{
+				assert(init);
+
+				if(*out_to_x) {
+					Base::value = (*out_to_x.get_om().*fun)(r);
+				} else
+					Base::value = Base::default_value;
+
+				return Base::value;
+			}
+		};
+
+		class double_buffer_setting: public fancy_x11_setting<buffer_type> {
+			typedef fancy_x11_setting<buffer_type> Base;
 
 		protected:
 			virtual std::pair<buffer_type, bool> do_convert(lua::state &l, int index)
@@ -81,22 +106,9 @@ namespace conky {
 					return Base::do_convert(l, index);
 			}
 
-
 		public:
-			virtual const buffer_type set(const buffer_type &r, bool init)
-			{
-				assert(init);
-
-				if(*out_to_x) {
-					value = out_to_x.get_om()->setup_buffer(r);
-				} else
-					value = buffer_type::SINGLE;
-
-				return value;
-			}
-
 			double_buffer_setting()
-				: Base("double_buffer", x11_output::buffer_type::XDBE, false)
+				: Base("double_buffer", buffer_type::SINGLE, &x11_output::setup_buffer)
 			{}
 		};
 
@@ -152,33 +164,6 @@ namespace conky {
 			return value = r;
 		}
 
-		const bool use_argb_visual_setting::set(const bool &r, bool init)
-		{
-			assert(init);
-
-			if(*out_to_x)
-				value = out_to_x.get_om()->set_visual(r);
-			else
-				value = false;
-
-			return value;
-		}
-
-		const bool own_window_setting::set(const bool &r, bool init)
-		{
-			assert(init);
-			if(*out_to_x) {
-				if(r)
-					out_to_x.get_om()->use_own_window();
-				else
-					out_to_x.get_om()->use_root_window();
-				value = r;
-			} else
-				value = false;
-
-			return value;
-		}
-
 		uint16_t
 		window_hints_traits::from_lua(lua::state &l, int index, const std::string &description)
 		{
@@ -215,92 +200,93 @@ namespace conky {
 			l.pushstring(ret);
 		}
 	} /* namespace conky::priv */
-} /* namespace conky */
 
-template<>
-conky::lua_traits<alignment>::Map conky::lua_traits<alignment>::map = {
-	{ "top_left",      TOP_LEFT },
-	{ "top_right",     TOP_RIGHT },
-	{ "top_middle",    TOP_MIDDLE },
-	{ "bottom_left",   BOTTOM_LEFT },
-	{ "bottom_right",  BOTTOM_RIGHT },
-	{ "bottom_middle", BOTTOM_MIDDLE },
-	{ "middle_left",   MIDDLE_LEFT },
-	{ "middle_middle", MIDDLE_MIDDLE },
-	{ "middle_right",  MIDDLE_RIGHT },
-	{ "none",          NONE }
-};
+	template<>
+	lua_traits<alignment>::Map lua_traits<alignment>::map = {
+		{ "top_left",      TOP_LEFT },
+		{ "top_right",     TOP_RIGHT },
+		{ "top_middle",    TOP_MIDDLE },
+		{ "bottom_left",   BOTTOM_LEFT },
+		{ "bottom_right",  BOTTOM_RIGHT },
+		{ "bottom_middle", BOTTOM_MIDDLE },
+		{ "middle_left",   MIDDLE_LEFT },
+		{ "middle_middle", MIDDLE_MIDDLE },
+		{ "middle_right",  MIDDLE_RIGHT },
+		{ "none",          NONE }
+	};
 
-template<>
-conky::lua_traits<window_type>::Map conky::lua_traits<window_type>::map = {
-	{ "normal",   TYPE_NORMAL },
-	{ "dock",     TYPE_DOCK },
-	{ "panel",    TYPE_PANEL },
-	{ "desktop",  TYPE_DESKTOP },
-	{ "override", TYPE_OVERRIDE }
-};
+	template<>
+	lua_traits<window_type>::Map lua_traits<window_type>::map = {
+		{ "normal",   TYPE_NORMAL },
+		{ "dock",     TYPE_DOCK },
+		{ "panel",    TYPE_PANEL },
+		{ "desktop",  TYPE_DESKTOP },
+		{ "override", TYPE_OVERRIDE }
+	};
 
-template<>
-conky::lua_traits<window_hints>::Map conky::lua_traits<window_hints>::map = {
-	{ "undecorated",  HINT_UNDECORATED },
-	{ "below",        HINT_BELOW },
-	{ "above",        HINT_ABOVE },
-	{ "sticky",       HINT_STICKY },
-	{ "skip_taskbar", HINT_SKIP_TASKBAR },
-	{ "skip_pager",   HINT_SKIP_PAGER }
-};
+	template<>
+	lua_traits<window_hints>::Map lua_traits<window_hints>::map = {
+		{ "undecorated",  HINT_UNDECORATED },
+		{ "below",        HINT_BELOW },
+		{ "above",        HINT_ABOVE },
+		{ "sticky",       HINT_STICKY },
+		{ "skip_taskbar", HINT_SKIP_TASKBAR },
+		{ "skip_pager",   HINT_SKIP_PAGER }
+	};
 
-namespace {
-	// used to set the default value for own_window_title
-	std::string gethostnamecxx()
-	{ update_uname(); return info.uname_s.nodename; }
-}
+	namespace {
+		// used to set the default value for own_window_title
+		std::string gethostnamecxx()
+		{ update_uname(); return info.uname_s.nodename; }
+	}
 
-/*
- * The order of these settings cannot be completely arbitrary. Some of them depend on others, and
- * the setters are called in the order in which they are defined. The order should be:
- * display_name -> out_to_x -> everything colour related
- *                          -> border_*, own_window_*, etc -> own_window -> double_buffer ->  imlib_cache_size
- */
+	/*
+	 * The order of these settings cannot be completely arbitrary. Some of them depend on others,
+	 * and the setters are called in the order in which they are defined. The order should be:
+	 * display_name -> out_to_x -> everything colour related
+	 *                          -> border_*, own_window_*, etc -> own_window -> double_buffer ->  imlib_cache_size
+	 */
 
-conky::simple_config_setting<alignment>   text_alignment("alignment", BOTTOM_LEFT, false);
-conky::simple_config_setting<std::string> display_name("display", std::string(), false);
-conky::priv::out_to_x_setting                    out_to_x;
+	simple_config_setting<alignment>   text_alignment("alignment", BOTTOM_LEFT, false);
+	simple_config_setting<std::string> display_name("display", std::string(), false);
+	priv::out_to_x_setting                    out_to_x;
 
-conky::range_config_setting<int>          border_inner_margin("border_inner_margin", 0,
-													std::numeric_limits<int>::max(), 3, true);
-conky::range_config_setting<int>          border_outer_margin("border_outer_margin", 0,
-													std::numeric_limits<int>::max(), 1, true);
-conky::range_config_setting<int>          border_width("border_width", 0,
-													std::numeric_limits<int>::max(), 1, true);
+	range_config_setting<int>          border_inner_margin("border_inner_margin", 0,
+														std::numeric_limits<int>::max(), 3, true);
+	range_config_setting<int>          border_outer_margin("border_outer_margin", 0,
+														std::numeric_limits<int>::max(), 1, true);
+	range_config_setting<int>          border_width("border_width", 0,
+														std::numeric_limits<int>::max(), 1, true);
 #ifdef BUILD_XFT
-conky::simple_config_setting<bool>        use_xft("use_xft", false, false);
+	simple_config_setting<bool>        use_xft("use_xft", false, false);
 #endif
 
-conky::simple_config_setting<bool>        set_transparent("own_window_transparent", false, false);
-conky::simple_config_setting<std::string> own_window_class("own_window_class",
-															PACKAGE_NAME, false);
+	simple_config_setting<bool>        set_transparent("own_window_transparent", false, false);
+	simple_config_setting<std::string> own_window_class("own_window_class",
+																PACKAGE_NAME, false);
 
-conky::simple_config_setting<std::string> own_window_title("own_window_title",
-										PACKAGE_NAME " (" + gethostnamecxx()+")", false);
+	simple_config_setting<std::string> own_window_title("own_window_title",
+											PACKAGE_NAME " (" + gethostnamecxx()+")", false);
 
-conky::simple_config_setting<window_type> own_window_type("own_window_type", TYPE_NORMAL, false);
-conky::simple_config_setting<uint16_t, conky::priv::window_hints_traits>
-									      own_window_hints("own_window_hints", 0, false);
+	simple_config_setting<window_type> own_window_type("own_window_type", TYPE_NORMAL, false);
+	simple_config_setting<uint16_t, priv::window_hints_traits>
+									   own_window_hints("own_window_hints", 0, false);
 
 
-conky::priv::use_argb_visual_setting      use_argb_visual;
-conky::range_config_setting<float>        own_window_argb_value("own_window_argb_value",
-																0, 1, 1, false);
+	fancy_x11_setting<bool>			   use_argb_visual("own_window_argb_visual", false,
+																	&x11_output::set_visual);
+	range_config_setting<float>        own_window_argb_value("own_window_argb_value",
+																	0, 1, 1, false);
 
-conky::priv::own_window_setting			  own_window;
+	fancy_x11_setting<bool>			   own_window("own_window", true, &x11_output::setup_window);
 
-conky::double_buffer_setting			  double_buffer;
+	double_buffer_setting			   double_buffer;
 
-conky::range_config_setting<char>  stippled_borders("stippled_borders", 0,
-											std::numeric_limits<char>::max(), 0, true);
+	range_config_setting<char>		   stippled_borders("stippled_borders", 0,
+												std::numeric_limits<char>::max(), 0, true);
 
-conky::background_colour_setting          background_colour("own_window_colour", "black");
+	background_colour_setting          background_colour("own_window_colour", "black");
+} /* namespace conky */
 
 
 #ifdef BUILD_IMLIB2

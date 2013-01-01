@@ -181,7 +181,7 @@ void print_scroll(struct text_object *obj, char *p, int p_max_size)
 	}
 #ifdef BUILD_X11
 	//reset color when scroll is finished
-	if (*out_to_x)
+	if (*conky::out_to_x)
 		new_special(p + strlen(p), FG)->arg = sd->resetcolor;
 #endif
 }

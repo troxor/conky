@@ -500,9 +500,9 @@ void llua_setup_window_table(int text_start_x, int text_start_y, int text_width,
 
 		llua_set_number("width", window.width);
 		llua_set_number("height", window.height);
-		llua_set_number("border_inner_margin", *border_inner_margin);
-		llua_set_number("border_outer_margin", *border_outer_margin);
-		llua_set_number("border_width", *border_width);
+		llua_set_number("border_inner_margin", *conky::border_inner_margin);
+		llua_set_number("border_outer_margin", *conky::border_outer_margin);
+		llua_set_number("border_width", *conky::border_width);
 
 		llua_set_number("text_start_x", text_start_x);
 		llua_set_number("text_start_y", text_start_y);

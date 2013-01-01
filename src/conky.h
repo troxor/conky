@@ -270,8 +270,6 @@ extern conky::range_config_setting<double> update_interval;
 extern conky::range_config_setting<double> update_interval_on_battery;
 double active_update_interval();
 
-extern conky::range_config_setting<char>  stippled_borders;
-
 void set_current_text_color(long colour);
 long get_current_text_color(void);
 

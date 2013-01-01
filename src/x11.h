@@ -237,6 +237,9 @@ namespace conky {
 		void create_fontset();
 
 		void process_events(bool &need_redraw);
+
+		void use_root_window();
+		void use_own_window();
 	protected:
 		virtual void work();
 
@@ -260,8 +263,9 @@ namespace conky {
 		XColor get_rgb(const std::shared_ptr<colour> &colour);
 
 		bool set_visual(bool argb);
-		void use_root_window();
-		void use_own_window();
+		bool setup_window(bool own)
+		{ if(own) use_own_window(); else use_root_window(); return own; }
+
 		buffer_type setup_buffer(buffer_type type);
 	};
 
@@ -285,26 +289,6 @@ namespace conky {
 			{ return om; }
 		};
 
-		class use_argb_visual_setting: public simple_config_setting<bool> {
-			typedef simple_config_setting<bool> Base;
-
-		public:
-			const bool set(const bool &r, bool init);
-			use_argb_visual_setting()
-				: Base("own_window_argb_visual", false, false)
-			{}
-		};
-
-		class own_window_setting: public simple_config_setting<bool> {
-			typedef simple_config_setting<bool> Base;
-
-		public:
-			const bool set(const bool &r, bool init);
-			own_window_setting()
-				: Base("own_window", false, false)
-			{}
-		};
-
 		struct window_hints_traits {
 			typedef lua_traits<window_hints> Traits;
 
@@ -312,32 +296,31 @@ namespace conky {
 			static void to_lua(lua::state &l, uint16_t t, const std::string &description);
 		};
 	} /* namespace conky::priv */
-} /* namespace conky */
 
-extern conky::simple_config_setting<std::string> display_name;
-extern conky::priv::out_to_x_setting             out_to_x;
+	extern simple_config_setting<std::string> display_name;
+	extern priv::out_to_x_setting             out_to_x;
 
-extern conky::range_config_setting<int>          border_inner_margin;
-extern conky::range_config_setting<int>          border_outer_margin;
-extern conky::range_config_setting<int>          border_width;
+	extern range_config_setting<int>          border_inner_margin;
+	extern range_config_setting<int>          border_outer_margin;
+	extern range_config_setting<int>          border_width;
 
 #ifdef BUILD_XFT
-extern conky::simple_config_setting<bool>        use_xft;
+	extern simple_config_setting<bool>        use_xft;
 #endif
 
-extern conky::simple_config_setting<bool>        set_transparent;
-extern conky::simple_config_setting<std::string> own_window_class;
-extern conky::simple_config_setting<std::string> own_window_title;
-extern conky::simple_config_setting<window_type> own_window_type;
+	extern simple_config_setting<bool>        set_transparent;
+	extern simple_config_setting<std::string> own_window_class;
+	extern simple_config_setting<std::string> own_window_title;
+	extern simple_config_setting<window_type> own_window_type;
 
-extern conky::simple_config_setting<uint16_t, conky::priv::window_hints_traits> own_window_hints;
+	extern simple_config_setting<uint16_t, priv::window_hints_traits> own_window_hints;
 
-extern conky::priv::use_argb_visual_setting      use_argb_visual;
+	/* range of 0.0-1.0 for alpha */
+	extern range_config_setting<float>        own_window_argb_value;
+} /* namespace conky */
 
-/* range of 0.0-1.0 for alpha */
-extern conky::range_config_setting<float>          own_window_argb_value;
-
-extern conky::priv::own_window_setting			 own_window;
+// XXX
+static conky::priv::out_to_x_setting &out_to_x = conky::out_to_x;
 
 #endif /*X11_H_*/
 #endif /* BUILD_X11 */
