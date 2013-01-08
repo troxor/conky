@@ -77,34 +77,6 @@ namespace {
 }
 #endif /* BUILD_XFT */
 
-void set_font(void)
-{
-#ifdef BUILD_XFT
-	if (*use_xft) return;
-#endif /* BUILD_XFT */
-	if (fonts[selected_font].font) {
-		XSetFont(display, window.gc, fonts[selected_font].font->fid);
-	}
-}
-
-void setup_fonts(void)
-{
-	if (not *out_to_x) {
-		return;
-	}
-#ifdef BUILD_XFT
-	if (*use_xft) {
-		if (window.xftdraw) {
-			XftDrawDestroy(window.xftdraw);
-			window.xftdraw = 0;
-		}
-		window.xftdraw = XftDrawCreate(display, window.drawable,
-				window.visual, window.colourmap);
-	}
-#endif /* BUILD_XFT */
-	set_font();
-}
-
 int add_font(const char *data_in)
 {
 	if (not *out_to_x) {
@@ -135,41 +107,6 @@ void free_fonts(bool utf8) {
 	}
 	fonts.clear();
 	selected_font = 0;
-#ifdef BUILD_XFT
-	if (window.xftdraw) {
-		XftDrawDestroy(window.xftdraw);
-		window.xftdraw = 0;
-	}
-#endif /* BUILD_XFT */
 }
-
-void load_fonts(bool utf8) {
-	if (not *out_to_x)
-		return;
-	for (size_t i = 0; i < fonts.size(); i++) {
-#ifdef BUILD_XFT
-		/* load Xft font */
-		if (*use_xft) {
-			if(not fonts[i].xftfont)
-				fonts[i].xftfont = XftFontOpenName(display, screen, fonts[i].name.c_str());
-
-			if (fonts[i].xftfont) {
-				continue;
-			}
-
-			NORM_ERR("can't load Xft font '%s'", fonts[i].name.c_str());
-			if ((fonts[i].xftfont = XftFontOpenName(display, screen,
-					"courier-12")) != NULL) {
-				continue;
-			}
-
-			CRIT_ERR(NULL, NULL, "can't load Xft font '%s'", "courier-12");
-
-			continue;
-		}
-#endif
-	}
-}
-
 #endif
 int add_font(const char *) { return 0; }

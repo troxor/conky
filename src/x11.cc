@@ -343,7 +343,7 @@ namespace conky {
 	}
 
 	std::shared_ptr<x11_output::colour>
-	x11_output::colour_factory::get_colour(const char *name, uint8_t alpha)
+	x11_output::colour_factory::get_colour(const char *name, uint16_t alpha)
 	{
 		XColor exact, screen;
 		if(XLookupColor(&display, colourmap, name, &exact, &screen) == 0) {
@@ -355,7 +355,7 @@ namespace conky {
 
 	std::shared_ptr<x11_output::colour>
 	x11_output::colour_factory::get_colour(uint16_t red, uint16_t green, uint16_t blue,
-											uint8_t alpha)
+											uint16_t alpha)
 	{
 		XColor colour;
 		colour.red = red;
@@ -365,15 +365,14 @@ namespace conky {
 	}
 
 	std::shared_ptr<x11_output::colour>
-	x11_output::true_colour_factory::get_colour(uint16_t red, uint16_t green, uint16_t blue,
-												uint8_t alpha)
+	x11_output::true_colour_factory::get_colour(XColor &c, uint16_t alpha)
 	{
-		return std::shared_ptr<colour>(new colour(
-					colour_shift(red, rgb_bits, red_shift) |
-					colour_shift(green, rgb_bits, green_shift) |
-					colour_shift(blue, rgb_bits, blue_shift) |
-					( *use_argb_visual ? alpha << 24u : 0u )
-		));
+		c.pixel = colour_shift(c.red, rgb_bits, red_shift) |
+			colour_shift(c.green, rgb_bits, green_shift) |
+			colour_shift(c.blue, rgb_bits, blue_shift) |
+			( *use_argb_visual ? colour_shift(alpha, 8, 24) : 0u );
+
+		return std::shared_ptr<colour>(new colour(c, alpha));
 	}
 
 	x11_output::alloc_colour_factory::alloc_colour_factory(Display &display_, Colormap colourmap_)
@@ -383,11 +382,11 @@ namespace conky {
 		w.red = w.green = w.blue = 0xffff;
 		if(XAllocColor(&display, colourmap, &w) == 0)
 			throw std::runtime_error("Unable to allocate any colours in the colourmap.");
-		white.reset(new alloc_colour(w.pixel, *this));
+		white.reset(new alloc_colour(w, *this));
 	}
 
 	std::shared_ptr<x11_output::colour>
-	x11_output::alloc_colour_factory::get_colour(XColor &colour, uint8_t)
+	x11_output::alloc_colour_factory::get_colour(XColor &colour, uint16_t)
 	{
 		if(XAllocColor(&display, colourmap, &colour) == 0) {
 			static bool warned = false;
@@ -401,10 +400,10 @@ namespace conky {
 			colour.pixel = white->get_pixel();
 			return white;
 		}
-		return std::shared_ptr<x11_output::colour>(new alloc_colour(colour.pixel, *this));
+		return std::shared_ptr<x11_output::colour>(new alloc_colour(colour, *this));
 	}
 
-	class x11_output::window_handler {
+	class x11_output::window_handler: private non_copyable {
 	protected:
 		Display &display;
 		const Window window;
@@ -467,13 +466,20 @@ namespace conky {
 		}
 	}
 
-	class x11_output::buffer {
+	class x11_output::buffer: private non_copyable {
+	public:
+		typedef std::function<void ()> DrawableChanged;
+
+	private:
+		Drawable drawable;
+		DrawableChanged drawable_changed;
+		std::shared_ptr<colour> foreground;
+
 		static std::unique_ptr<buffer> try_xdbe(Display &display, window_handler &window);
 
 	protected:
 		Display &display;
 		window_handler &window;
-		Drawable drawable;
 		GC gc;
 
 		void change_gc(GC gc_, uint64_t value, unsigned long mask)
@@ -491,8 +497,11 @@ namespace conky {
 		void change(uint64_t value, unsigned long mask)
 		{ change_gc(gc, value, mask); }
 
+		void set_drawable(Drawable drawable_)
+		{ drawable = drawable_; if(drawable_changed) drawable_changed(); }
+
 		buffer(Display &display_, window_handler &window_, Drawable drawable_)
-			: display(display_), window(window_), drawable(drawable_)
+			: drawable(drawable_), display(display_),  window(window_)
 		{
 			XGCValues values;
 			values.graphics_exposures = 0;
@@ -513,7 +522,9 @@ namespace conky {
 		// should return false if we need a full redraw
 		virtual bool expose(short x, short y, short width, short height) = 0;
 
-		void set_foreground(const colour &c) { XSetForeground(&display, gc, c.get_pixel()); }
+		const std::shared_ptr<colour>& get_foreground() const { return foreground; }
+		void set_foreground(const std::shared_ptr<colour> &c)
+		{ foreground = c; XSetForeground(&display, gc, c->get_pixel()); }
 
 		void set_dashes(char dashes) { change(dashes, GCDashList);}
 		void set_line_style(int line_style) { change(line_style, GCLineStyle); }
@@ -521,6 +532,9 @@ namespace conky {
 
 		void draw_rectangle(const point &pos, const point &size)
 		{ XDrawRectangle(&display, drawable, gc, pos.x, pos.y, size.x, size.y); }
+
+		void set_on_drawable_changed(const DrawableChanged &drawable_changed_)
+		{ drawable_changed = drawable_changed_; }
 
 		static std::unique_ptr<buffer>
 		create(buffer_type type, Display &display, window_handler &window, point size,
@@ -549,7 +563,7 @@ namespace conky {
 		{ swapinfo.swap_window = window.get_window(); }
 
 		virtual ~xdbe_buffer()
-		{ XdbeDeallocateBackBufferName(&display, drawable); }
+		{ XdbeDeallocateBackBufferName(&display, get_drawable()); }
 
 		virtual buffer_type get_type() const { return buffer_type::XDBE; }
 
@@ -567,7 +581,7 @@ namespace conky {
 
 		virtual bool expose(short x, short y, short width, short height)
 		{
-			XCopyArea(&display, drawable, window.get_window(), gc, x, y, width, height, x, y);
+			XCopyArea(&display, get_drawable(), window.get_window(), gc, x, y, width, height, x, y);
 			return true;
 		}
 	};
@@ -614,7 +628,9 @@ namespace conky {
 			window.clear();
 			XCopyArea(&display, window.get_window(), background, copy_gc,
 					0, 0, size.x, size.y, 0, 0);
-			std::swap(drawable, background);
+			Pixmap t = get_drawable();
+			set_drawable(background);
+			background = t;
 		}
 
 	public:
@@ -622,14 +638,14 @@ namespace conky {
 
 		virtual ~pixmap_buffer()
 		{
-			XFreePixmap(&display, drawable);
+			XFreePixmap(&display, get_drawable());
 			XFreePixmap(&display, background);
 			XFreeGC(&display, copy_gc);
 		}
 
 		virtual bool expose(short x, short y, short width, short height)
 		{
-			XCopyArea(&display, drawable, window.get_window(), copy_gc, x, y, width, height, x, y);
+			XCopyArea(&display, get_drawable(), window.get_window(), copy_gc, x, y, width, height, x, y);
 			return true;
 		}
 
@@ -652,7 +668,6 @@ namespace conky {
 				XCreatePixmap(&display_, window_.get_window(), size_.x, size_.y, depth_)),
 		  size(size_), depth(depth_)
 	{
-		drawable = create_pixmap();
 		background = create_pixmap();
 
 		XGCValues values;
@@ -666,12 +681,12 @@ namespace conky {
 
 	void x11_output::pixmap_buffer::resize(const point &size_)
 	{
-		XFreePixmap(&display, drawable);
+		XFreePixmap(&display, get_drawable());
 		XFreePixmap(&display, background );
 
 		size = size_;
 
-		drawable = create_pixmap();
+		set_drawable(create_pixmap());
 		background = create_pixmap();
 		semi_clear();
 	}
@@ -700,27 +715,28 @@ namespace conky {
 		return ret;
 	}
 
-	class x11_output::font {
-	protected:
-		Display &display;
-
-		font(Display &display_) : display(display_) { }
+	class x11_output::font: private non_copyable {
 	public:
 		virtual ~font() { }
 
 		virtual point get_max_extents() = 0;
 		virtual point get_text_size(const std::string &text) = 0;
-
-		virtual void
-		draw_text(buffer &drawable, const std::string &text,
-				const point &pos, const point &size) = 0;
+		virtual void draw_text(const std::string &text, const point &pos, const point &size) = 0;
 	};
 
-	class x11_output::font_factory {
+	class x11_output::font_factory: private non_copyable {
 	protected:
 		Display &display;
+		buffer &drawable;
 
-		font_factory(Display &display_) : display(display_) { }
+		font_factory(Display &display_, buffer &drawable_)
+			: display(display_), drawable(drawable_)
+		{ }
+
+		class load_font_error: public std::runtime_error {
+		public:
+			load_font_error(const std::string &message) : std::runtime_error(message) { }
+		};
 
 	public:
 		virtual ~font_factory() { }
@@ -729,18 +745,14 @@ namespace conky {
 	};
 
 	class x11_output::xlib_font_factory: public font_factory {
-		class load_font_error: public std::runtime_error {
-		public:
-			load_font_error(const std::string &message) : std::runtime_error(message) { }
-		};
-
 		class xlib_font: public font {
+			xlib_font_factory &factory;
 			XFontSet fontset;
 			const XRectangle *font_extents;
 
 		public:
-			xlib_font(Display &display_, const char *name);
-			virtual ~xlib_font() { XFreeFontSet(&display, fontset); }
+			xlib_font(xlib_font_factory &factory_, const char *name);
+			virtual ~xlib_font() { XFreeFontSet(&factory.display, fontset); }
 
 			virtual point get_max_extents()
 			{
@@ -756,21 +768,23 @@ namespace conky {
 			}
 
 			virtual void
-			draw_text(buffer &drawable, const std::string &text, const point &pos, const point &)
+			draw_text(const std::string &text, const point &pos, const point &)
 			{
 				// TODO: clipping ?
-				Xutf8DrawString(&display, drawable.get_drawable(), fontset, drawable.get_gc(),
-						pos.x, pos.y, text.c_str(), text.length());
+				Xutf8DrawString(&factory.display, factory.drawable.get_drawable(), fontset,
+						factory.drawable.get_gc(), pos.x, pos.y, text.c_str(), text.length());
 			}
 		};
 
 	public:
-		xlib_font_factory(Display &display_) : font_factory(display_) { }
+		xlib_font_factory(Display &display_, buffer &drawable_)
+			: font_factory(display_, drawable_)
+		{ }
 
 		virtual std::shared_ptr<font> get_font(const char *name)
 		{
 			try {
-				return std::shared_ptr<font>(new xlib_font(display, name));
+				return std::shared_ptr<font>(new xlib_font(*this, name));
 			}
 			catch(load_font_error &e) {
 				NORM_ERR("%s Loading default font instead.", e.what());
@@ -779,16 +793,17 @@ namespace conky {
 		}
 
 		virtual std::shared_ptr<font> get_default_font()
-		{ return std::shared_ptr<font>(new xlib_font(display, "fixed")); }
+		{ return std::shared_ptr<font>(new xlib_font(*this, "fixed")); }
 	};
 
-	x11_output::xlib_font_factory::xlib_font::xlib_font(Display &display_, const char *name)
-		: font(display_)
+	x11_output::xlib_font_factory::xlib_font::xlib_font(xlib_font_factory &factory_,
+														const char *name)
+		: factory(factory_)
 	{
 		char **missing_charset_list;
 		int missing_charset_count;
 		char *def_string;
-		fontset = XCreateFontSet(&display, name, &missing_charset_list,
+		fontset = XCreateFontSet(&factory.display, name, &missing_charset_list,
 				&missing_charset_count, &def_string);
 		if(fontset == None) {
 			throw load_font_error(std::string("Unable to create font set for font '") +
@@ -807,12 +822,74 @@ namespace conky {
 	}
 
 #ifdef BUILD_XFT
-	class x11_output::xft_font: public font {
+	class x11_output::xft_font_factory: public font_factory {
+		int screen;
+		XftDraw *draw;
+
+		void drawable_changed() { XftDrawChange(draw, drawable.get_drawable()); }
+
+		class xft_font: public font {
+			xft_font_factory &factory;
+			XftFont *xf;
+
+		public:
+			xft_font(xft_font_factory &factory_, int screen, const char *name)
+				: factory(factory_), xf(XftFontOpenName(&factory_.display, screen, name))
+			{
+				if(xf == NULL)
+					throw load_font_error(std::string("Unable to load xft font '") + name + "'.");
+			}
+
+			~xft_font() { XftFontClose(&factory.display, xf); }
+
+			virtual point get_max_extents() { return { xf->max_advance_width, xf->height }; }
+			virtual point get_text_size(const std::string &text)
+			{
+				XGlyphInfo gi;
+				XftTextExtentsUtf8(&factory.display, xf,
+						reinterpret_cast<const FcChar8 *>(text.c_str()), text.length(), &gi);
+				return { gi.xOff, xf->height };
+			}
+
+			virtual void draw_text(const std::string &text, const point &pos, const point &)
+			{
+				// XXX clipping?
+				const auto &c = factory.drawable.get_foreground();
+				const auto &xc = c->get_xcolor();
+				XftColor xftc;
+
+				xftc.pixel = xc.pixel;
+				xftc.color.red = xc.red;
+				xftc.color.green = xc.green;
+				xftc.color.blue = xc.blue;
+				xftc.color.alpha = c->get_alpha();
+
+				XftDrawStringUtf8(factory.draw, &xftc, xf, pos.x, pos.y,
+						reinterpret_cast<const FcChar8 *>(text.c_str()), text.length());
+			}
+		};
 	public:
-		xft_font(Display &display_, const char *name)
-			: font(display_)
+		xft_font_factory(Display &display_, int screen_, Visual &visual, Colormap colourmap,
+				buffer &drawable_)
+			: font_factory(display_, drawable_), screen(screen_),
+			  draw(XftDrawCreate(&display_, drawable.get_drawable(), &visual, colourmap))
+		{ drawable.set_on_drawable_changed(std::bind(&xft_font_factory::drawable_changed, this)); }
+
+		virtual ~xft_font_factory() { XftDrawDestroy(draw); }
+
+		virtual std::shared_ptr<font> get_font(const char *name)
 		{
+			try {
+				return std::shared_ptr<font>(new xft_font(*this, screen, name));
+			}
+			catch(load_font_error &e) {
+				NORM_ERR("%s Loading default font instead.", e.what());
+				return get_default_font();
+			}
 		}
+
+		virtual std::shared_ptr<font> get_default_font()
+		{ return std::shared_ptr<font>(new xft_font(*this, screen, "courier-12")); }
 	};
 #endif /* BUILD_XFT */
 
@@ -844,6 +921,7 @@ namespace conky {
 		fg_colour.reset();
 		colours.reset();
 		current_font.reset();
+		fonts.reset();
 		drawable.reset();
 		window.reset();
 		XCloseDisplay(display);
@@ -1198,7 +1276,7 @@ namespace conky {
 		drawable = buffer::create(type, *display, *window, window_size, depth);
 		colours = colour_factory::create(*display, *visual, colourmap);
 		fg_colour = colours->get_colour("white");
-		drawable->set_foreground(*fg_colour);
+		drawable->set_foreground(fg_colour);
 		return drawable->get_type();
 	}
 
@@ -1206,14 +1284,15 @@ namespace conky {
 	{
 		if(xft) {
 #ifdef BUILD_XFT
-			fonts = std::unique_ptr<font_factory>(new xft_font_factory(*display));
+			fonts = std::unique_ptr<font_factory>(new xft_font_factory(*display, screen, *visual,
+													colourmap, *drawable));
 #else
 			NORM_ERR("Support for Xft fonts disabled during compilation. "
 					"Will use xlib font API instead.");
 #endif
 		}
 		if(not fonts) {
-			fonts = std::unique_ptr<font_factory>(new xlib_font_factory(*display));
+			fonts = std::unique_ptr<font_factory>(new xlib_font_factory(*display, *drawable));
 			xft = false;
 		}
 
@@ -1306,16 +1385,7 @@ namespace conky {
 	{ draw_text(conv.to_utf8(text), p, size); }
 
 	void x11_output::draw_text(const std::string &text, const point &p, const point &size)
-	{ current_font->draw_text(*drawable, text, p, size); }
-}
-
-void destroy_window(void)
-{
-#ifdef BUILD_XFT
-	if(window.xftdraw) {
-		XftDrawDestroy(window.xftdraw);
-	}
-#endif /* BUILD_XFT */
+	{ current_font->draw_text(text, p, size); }
 }
 
 //Get current desktop number

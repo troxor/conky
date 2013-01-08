@@ -535,33 +535,6 @@ int get_total_updates(void)
 	return total_updates;
 }
 
-int calc_text_width(const char *s)
-{
-	size_t slen = strlen(s);
-
-		return slen;
-#if 0 && BUILD_X11
-	}
-#ifdef BUILD_XFT
-	if (*use_xft) {
-		XGlyphInfo gi;
-
-		if (*utf8_mode) {
-			XftTextExtentsUtf8(display, fonts[selected_font].xftfont,
-					(const FcChar8 *) s, slen, &gi);
-		} else {
-			XftTextExtents8(display, fonts[selected_font].xftfont,
-					(const FcChar8 *) s, slen, &gi);
-		}
-		return gi.xOff;
-	} else
-#endif /* BUILD_XFT */
-	{
-		return XTextWidth(fonts[selected_font].font, s, slen);
-	}
-#endif /* BUILD_X11 */
-}
-
 /* quite boring functions */
 
 static inline void for_each_line(char *b, int f(char *, int))
@@ -870,11 +843,6 @@ static void generate_text(void)
 	total_updates++;
 }
 #endif
-
-int get_string_width(const char *s)
-{
-	return *s ? calc_text_width(s) : 0;
-}
 
 #if 0 && BUILD_X11
 static inline int get_border_total()
@@ -1247,43 +1215,6 @@ static void draw_string(const char *s)
 	}
 #endif /* BUILD_X11 */
 	s = tmpstring2;
-#ifdef BUILD_X11
-	if (*out_to_x) {
-#ifdef BUILD_XFT
-		if (*use_xft) {
-			XColor c;
-			XftColor c2;
-
-			c.pixel = current_color;
-			// query color on custom colormap
-			XQueryColor(display, window.colourmap, &c);
-
-			c2.pixel = c.pixel;
-			c2.color.red = c.red;
-			c2.color.green = c.green;
-			c2.color.blue = c.blue;
-			c2.color.alpha = fonts[selected_font].font_alpha;
-			if (*utf8_mode) {
-				XftDrawStringUtf8(window.xftdraw, &c2, fonts[selected_font].xftfont,
-					cur_x, cur_y, (const XftChar8 *) s, strlen(s));
-			} else {
-				XftDrawString8(window.xftdraw, &c2, fonts[selected_font].xftfont,
-					cur_x, cur_y, (const XftChar8 *) s, strlen(s));
-			}
-		} else
-#endif
-		{
-			if (*utf8_mode) {
-				Xutf8DrawString(display, window.drawable, fonts[selected_font].fontset, window.gc, cur_x, cur_y, s,
-					strlen(s));
-			} else {
-				XDrawString(display, window.drawable, window.gc, cur_x, cur_y, s,
-					strlen(s));
-			}
-		}
-		cur_x += width_of_s;
-	}
-#endif /* BUILD_X11 */
 	memcpy(tmpstring1, s, tbs);
 }
 

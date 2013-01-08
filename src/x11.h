@@ -30,10 +30,6 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 
-#ifdef BUILD_XFT
-#include <X11/Xft/Xft.h>
-#endif
-
 #ifdef BUILD_XDBE
 #include <X11/extensions/Xdbe.h>
 #endif
@@ -65,16 +61,6 @@ enum window_hints {
 struct conky_window {
 	Window root, window /*XXX*/, desktop;
 	GC gc;
-
-#ifdef BUILD_XDBE
-	XdbeBackBuffer back_buffer;
-#else
-	Pixmap back_buffer;
-#endif
-#ifdef BUILD_XFT
-	XftDraw *xftdraw;
-#endif
-
 	int width, height; // XXX
 };
 
@@ -112,24 +98,34 @@ namespace conky {
 
 	class x11_output: public output_method {
 		class true_colour_factory;
+		class non_copyable {
+			non_copyable(const non_copyable &) = delete;
+			const non_copyable& operator=(const non_copyable &) = delete;
+
+		public:
+			non_copyable() { }
+		};
 
 	public:
-		class colour {
+		class colour: private non_copyable {
 		protected:
-			const unsigned long pixel;
+			const XColor c;
+			const uint16_t alpha;
 
-			explicit colour(unsigned long pixel_) : pixel(pixel_) {}
+			explicit colour(const XColor &c_, uint16_t alpha_) : c(c_), alpha(alpha_) { }
 
 		public:
 			virtual ~colour() { }
 
-			unsigned long get_pixel() const { return pixel; }
+			unsigned long get_pixel() const { return c.pixel; }
+			const XColor& get_xcolor() const { return c; }
+			uint16_t get_alpha() const { return alpha; }
 
 			friend class true_colour_factory;
 		};
 
 	private:
-		class colour_factory {
+		class colour_factory: private non_copyable {
 		protected:
 			Display &display;
 			const Colormap colourmap;
@@ -141,14 +137,14 @@ namespace conky {
 
 			virtual ~colour_factory() { }
 
-			std::shared_ptr<colour> get_colour(const char *name, uint8_t alpha = 255);
+			std::shared_ptr<colour> get_colour(const char *name, uint16_t alpha = 0xffff);
 
 			// One should implement at least one of the following two functions, because the
 			// default implementations just call each other
 			virtual std::shared_ptr<colour>
-			get_colour(uint16_t red, uint16_t green, uint16_t blue, uint8_t alpha = 255);
+			get_colour(uint16_t red, uint16_t green, uint16_t blue, uint16_t alpha = 0xffff);
 
-			virtual std::shared_ptr<colour> get_colour(XColor &colour, uint8_t alpha = 255)
+			virtual std::shared_ptr<colour> get_colour(XColor &colour, uint16_t alpha = 0xffff)
 			{
 				auto t = get_colour(colour.red, colour.green, colour.blue, alpha);
 				colour.pixel = t->get_pixel();
@@ -172,8 +168,7 @@ namespace conky {
 				  rgb_bits(visual.bits_per_rgb)
 			{ }
 
-			virtual std::shared_ptr<colour>
-			get_colour(uint16_t red, uint16_t green, uint16_t blue, uint8_t alpha);
+			virtual std::shared_ptr<colour> get_colour(XColor &c, uint16_t alpha = 0xffff);
 		};
 
 		class alloc_colour_factory: public colour_factory {
@@ -181,22 +176,22 @@ namespace conky {
 				const alloc_colour_factory &factory;
 
 			public:
-				alloc_colour(unsigned long pixel, const alloc_colour_factory &factory_)
-					: colour(pixel), factory(factory_)
+				alloc_colour(XColor c_, const alloc_colour_factory &factory_)
+					: colour(c_, 0xffff), factory(factory_)
 				{ }
 
 				virtual ~alloc_colour()
 				{
 					// const_cast is here because of a stupid interface
 					XFreeColors(&factory.display, factory.colourmap,
-							const_cast<unsigned long *>(&pixel), 1, 0);
+							const_cast<unsigned long *>(&c.pixel), 1, 0);
 				}
 			};
 
 			std::shared_ptr<colour> white;
 		public:
 			alloc_colour_factory(Display &display_, Colormap colourmap_);
-			virtual std::shared_ptr<colour> get_colour(XColor &colour, uint8_t alpha);
+			virtual std::shared_ptr<colour> get_colour(XColor &colour, uint16_t alpha);
 		};
 
 		// window classes
@@ -261,7 +256,7 @@ namespace conky {
 		virtual void draw_text(const std::string &text, const point &p, const point &size);
 		virtual void draw_text(const std::u32string &text, const point &p, const point &size);
 
-		std::shared_ptr<colour> get_colour(const char *name, uint8_t alpha = 255)
+		std::shared_ptr<colour> get_colour(const char *name, uint16_t alpha = 0xffff)
 		{ return colours->get_colour(name, alpha); }
 
 		XColor get_rgb(const std::shared_ptr<colour> &colour);
