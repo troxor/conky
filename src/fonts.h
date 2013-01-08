@@ -42,16 +42,8 @@ struct font_list {
 	XFontStruct *font;
 	XFontSet fontset;
 
-#ifdef BUILD_XFT
-	XftFont *xftfont;
-	int font_alpha;
-#endif
-
 	font_list()
 		: name(), font(NULL), fontset(NULL)
-#ifdef BUILD_XFT
-		  , xftfont(NULL), font_alpha(0xffff)
-#endif
 	{}
 };
 
