@@ -456,8 +456,6 @@ static conky::simple_config_setting<bool> show_graph_scale("show_graph_scale", f
 static conky::simple_config_setting<bool> show_graph_range("show_graph_range", false, false);
 
 /* Position on the screen */
-static conky::simple_config_setting<int> gap_x("gap_x", 5, true);
-static conky::simple_config_setting<int> gap_y("gap_y", 60, true);
 
 /* border */
 static conky::simple_config_setting<bool> draw_borders("draw_borders", false, false);
@@ -951,34 +949,6 @@ static void update_text_area(void)
 		}
 	}
 
-	alignment align = *text_alignment;
-	/* get text position on workarea */
-	switch (align) {
-		case TOP_LEFT: case TOP_RIGHT: case TOP_MIDDLE:
-			y = *gap_y;
-			break;
-
-		case BOTTOM_LEFT: case BOTTOM_RIGHT: case BOTTOM_MIDDLE: default:
-			y = workarea[3] - text_height - *gap_y;
-			break;
-
-		case MIDDLE_LEFT: case MIDDLE_RIGHT: case MIDDLE_MIDDLE:
-			y = workarea[3] / 2 - text_height / 2 - *gap_y;
-			break;
-	}
-	switch (align) {
-		case TOP_LEFT: case BOTTOM_LEFT: case MIDDLE_LEFT: default:
-			x = *gap_x;
-			break;
-
-		case TOP_RIGHT: case BOTTOM_RIGHT: case MIDDLE_RIGHT:
-			x = workarea[2] - text_width - *gap_x;
-			break;
-
-		case TOP_MIDDLE: case BOTTOM_MIDDLE: case MIDDLE_MIDDLE:
-			x = workarea[2] / 2 - text_width / 2 - *gap_x;
-			break;
-	}
 	if (align == NONE) {	// Let the WM manage the window
 			x = window.x;
 			y = window.y;
@@ -2701,7 +2671,7 @@ void initialisation(int argc, char **argv) {
 				state->pushstring(optarg);
 				total_run_times.lua_set(*state);
 				break;
-#ifdef BUILD_X11
+#if 0
 			case 'x':
 				state->pushstring(optarg);
 				gap_x.lua_set(*state);

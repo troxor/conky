@@ -248,6 +248,9 @@ namespace conky {
 	 */
 
 	simple_config_setting<alignment>   text_alignment("alignment", BOTTOM_LEFT, false);
+	conky::simple_config_setting<int>  gap_x("gap_x", 5, true);
+	conky::simple_config_setting<int>  gap_y("gap_y", 60, true);
+
 	simple_config_setting<std::string> display_name("display", std::string(), false);
 	priv::out_to_x_setting                    out_to_x;
 
@@ -407,13 +410,16 @@ namespace conky {
 	protected:
 		Display &display;
 		const Window window;
+		point text_pos;
 
 	public:
 		window_handler(Display &display_, Window window_) : display(display_), window(window_) { }
 		virtual ~window_handler() { }
 
 		Window get_window() { return window; }
-		virtual void resize(point size) = 0;
+		const point& get_text_pos() const { return text_pos; }
+		virtual void resize(const point &size) = 0;
+		virtual void move(const point &pos) = 0;
 		virtual void clear() = 0;
 		virtual void set_background() { }
 	};
@@ -426,7 +432,8 @@ namespace conky {
 			: window_handler(display_, window_)
 		{ }
 
-		virtual void resize(point size_) { size = size_; }
+		virtual void resize(const point &size_) { size = size_; }
+		virtual void move(const point &pos) { text_pos = pos; }
 		virtual void clear() { XClearArea(&display, window, 0, 0, size.x, size.y, False); }
 	};
 
@@ -439,7 +446,8 @@ namespace conky {
 		{ }
 		~own_window_handler() { XDestroyWindow(&display, window); }
 
-		virtual void resize(point size) { XResizeWindow(&display, window, size.x, size.y); }
+		virtual void resize(const point &size) { XResizeWindow(&display, window, size.x, size.y); }
+		virtual void move(const point &pos) { XMoveWindow(&display, window, pos.x, pos.y); }
 		virtual void clear() { XClearWindow(&display, window); }
 
 		virtual void set_background();
@@ -518,6 +526,7 @@ namespace conky {
 		virtual void clear() = 0;
 		virtual void swap() = 0;
 		virtual void resize(const point &size) { window.resize(size); }
+		virtual const point& get_text_pos() { return window.get_text_pos(); }
 
 		// should return false if we need a full redraw
 		virtual bool expose(short x, short y, short width, short height) = 0;
@@ -530,8 +539,11 @@ namespace conky {
 		void set_line_style(int line_style) { change(line_style, GCLineStyle); }
 		void set_line_width(unsigned short width) { change(width, GCLineWidth); }
 
-		void draw_rectangle(const point &pos, const point &size)
-		{ XDrawRectangle(&display, drawable, gc, pos.x, pos.y, size.x, size.y); }
+		void draw_rectangle(point pos, const point &size)
+		{
+			pos += get_text_pos();
+			XDrawRectangle(&display, drawable, gc, pos.x, pos.y, size.x, size.y);
+		}
 
 		void set_on_drawable_changed(const DrawableChanged &drawable_changed_)
 		{ drawable_changed = drawable_changed_; }
@@ -620,14 +632,17 @@ namespace conky {
 		Pixmap background;
 		GC copy_gc;
 
+		static const point dummy_pos;
+
 		Pixmap create_pixmap()
 		{ return XCreatePixmap(&display, window.get_window(), size.x, size.y, depth); }
 
 		void semi_clear()
 		{
 			window.clear();
+			const point &pos = window.get_text_pos();
 			XCopyArea(&display, window.get_window(), background, copy_gc,
-					0, 0, size.x, size.y, 0, 0);
+					pos.x, pos.y, size.x, size.y, 0, 0);
 			Pixmap t = get_drawable();
 			set_drawable(background);
 			background = t;
@@ -645,22 +660,27 @@ namespace conky {
 
 		virtual bool expose(short x, short y, short width, short height)
 		{
-			XCopyArea(&display, get_drawable(), window.get_window(), copy_gc, x, y, width, height, x, y);
+			const point &pos = window.get_text_pos();
+			XCopyArea(&display, get_drawable(), window.get_window(), copy_gc,
+						x, y, width, height, x+pos.x, y+pos.y);
 			return true;
 		}
 
 		virtual buffer_type get_type() const { return buffer_type::PIXMAP; }
 		virtual void swap() { expose(0, 0, size.x, size.y); }
+		virtual const point& get_text_pos() { return dummy_pos; }
 
 		virtual void clear()
 		{
 			semi_clear();
+			const point &pos = window.get_text_pos();
 			XCopyArea(&display, background, window.get_window(), copy_gc,
-					0, 0, size.x, size.y, 0, 0);
+					0, 0, size.x, size.y, pos.x, pos.y);
 		}
 
 		virtual void resize(const point &size_);
 	};
+	const point x11_output::pixmap_buffer::dummy_pos(0, 0);
 
 	x11_output::pixmap_buffer::pixmap_buffer(Display &display_, window_handler &window_,
 											 point size_, unsigned int depth_)
@@ -768,8 +788,9 @@ namespace conky {
 			}
 
 			virtual void
-			draw_text(const std::string &text, const point &pos, const point &)
+			draw_text(const std::string &text, const point &pos_, const point &)
 			{
+				point pos = pos_ + factory.drawable.get_text_pos();
 				// TODO: clipping ?
 				Xutf8DrawString(&factory.display, factory.drawable.get_drawable(), fontset,
 						factory.drawable.get_gc(), pos.x, pos.y, text.c_str(), text.length());
@@ -851,8 +872,10 @@ namespace conky {
 				return { gi.xOff, xf->height };
 			}
 
-			virtual void draw_text(const std::string &text, const point &pos, const point &)
+			virtual void draw_text(const std::string &text, const point &pos_, const point &)
 			{
+				point pos = pos_ + factory.drawable.get_text_pos();
+
 				// XXX clipping?
 				const auto &c = factory.drawable.get_foreground();
 				const auto &xc = c->get_xcolor();
@@ -1336,6 +1359,40 @@ namespace conky {
 				drawable->resize(size);
 				window_size = size;
 			}
+
+			point pos;
+			alignment align = *text_alignment;
+			switch (align) {
+				case TOP_LEFT: case TOP_RIGHT: case TOP_MIDDLE:
+					pos.y = *gap_y;
+					break;
+
+				case BOTTOM_LEFT: case BOTTOM_RIGHT: case BOTTOM_MIDDLE: default:
+					pos.y = display_size.y - window_size.y - *gap_y;
+					break;
+
+				case MIDDLE_LEFT: case MIDDLE_RIGHT: case MIDDLE_MIDDLE:
+					pos.y = (display_size.y - window_size.y) / 2;
+					break;
+			}
+			switch (align) {
+				case TOP_LEFT: case BOTTOM_LEFT: case MIDDLE_LEFT: default:
+					pos.x = *gap_x;
+					break;
+
+				case TOP_RIGHT: case BOTTOM_RIGHT: case MIDDLE_RIGHT:
+					pos.x = display_size.x - window_size.x - *gap_x;
+					break;
+
+				case TOP_MIDDLE: case BOTTOM_MIDDLE: case MIDDLE_MIDDLE:
+					pos.x = (display_size.x - window_size.x) / 2;
+					break;
+			}
+			if(position != pos) {
+				window->move(pos);
+				position = pos;
+			}
+
 			drawable->clear();
 			if(*border_width > 0) {
 				if(*stippled_borders > 0) {
