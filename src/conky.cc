@@ -290,9 +290,6 @@ static void print_version(void)
 #endif /* BUILD_LUA_IMLIB2 */
 #ifdef BUILD_X11
                 << _(" X11:\n")
-# ifdef BUILD_XDAMAGE
-                << _("  * Xdamage extension\n")
-# endif /* BUILD_XDAMAGE */
 # ifdef BUILD_XDBE
                 << _("  * XDBE (double buffer extension)\n")
 # endif /* BUILD_XDBE */
@@ -739,10 +736,6 @@ void generate_text_internal(char *p, int p_max_size, struct text_object root)
 
 		obj = obj->next;
 	}
-#if 0 && BUILD_X11
-	/* load any new fonts we may have had */
-	load_fonts(*utf8_mode);
-#endif /* BUILD_X11 */
 #ifdef BUILD_ICONV
 	free(buff_in);
 #endif /* BUILD_ICONV */
@@ -823,144 +816,6 @@ static void generate_text(void)
 #endif
 
 #if 0 && BUILD_X11
-static inline int get_border_total()
-{
-	return *border_inner_margin + *border_outer_margin +
-			*border_width;
-}
-
-static int get_string_width_special(char *s, int special_index)
-{
-	char *p, *final;
-	special_t *current = specials;
-	int idx = 1;
-	int width = 0;
-	long i;
-
-	if (!s)
-		return 0;
-
-	if (not *out_to_x)
-		return strlen(s);
-
-	p = strndup(s, *text_buffer_size);
-	final = p;
-
-	for(i = 0; i < special_index; i++)
-		current = current->next;
-	for(i = 0; i < idx; i++)
-		current = current->next;
-
-	while (*p) {
-		if (*p == SPECIAL_CHAR) {
-			/* shift everything over by 1 so that the special char
-			 * doesn't mess up the size calculation */
-			for (i = 0; i < (long)strlen(p); i++) {
-				*(p + i) = *(p + i + 1);
-			}
-			if (current->type == GRAPH
-					|| current->type == GAUGE
-					|| current->type == BAR) {
-				width += current->width;
-			}
-			if (current->type == FONT) {
-				//put all following text until the next fontchange/stringend in influenced_by_font but do not include specials
-				char *influenced_by_font=strdup(p);
-				special_t *current_after_font=current;
-				for(i=0; influenced_by_font[i]!=0; i++) {
-					if(influenced_by_font[i] == SPECIAL_CHAR) {
-						//remove specials and stop at fontchange
-						current_after_font=current_after_font->next;
-						if(current_after_font->type == FONT) {
-							influenced_by_font[i]=0;
-							break;
-						} else strcpy(&influenced_by_font[i], &influenced_by_font[i+1]);
-					}
-				}
-				//add the length of influenced_by_font in the new font to width
-				int orig_font = selected_font;
-				selected_font=current->font_added;
-				width += calc_text_width(influenced_by_font);
-				selected_font = orig_font;
-				free(influenced_by_font);
-				//make sure there chars counted in the new font are not again counted in the old font
-				int specials_skipped=0;
-				while(i>0) {
-					if(p[specials_skipped]!=1) strcpy(&p[specials_skipped], &p[specials_skipped+1]); else specials_skipped++;
-					i--;
-				}
-			}
-			idx++;
-			current = current->next;
-		} else {
-			p++;
-		}
-	}
-	if (strlen(final) > 1) {
-		width += calc_text_width(final);
-	}
-	free(final);
-	return width;
-}
-
-static int text_size_updater(char *s, int special_index);
-
-int last_font_height;
-static void update_text_area(void)
-{
-	int x = 0, y = 0;
-
-	if (not *out_to_x)
-		return;
-	/* update text size if it isn't fixed */
-	if (!fixed_size)
-	{
-		text_width = *minimum_width;
-		text_height = 0;
-		last_font_height = font_height();
-		for_each_line(text_buffer, text_size_updater);
-		text_width += 1;
-		if (text_height < *minimum_height) {
-			text_height = *minimum_height;
-		}
-		int mw = *maximum_width;
-		if (text_width > mw && mw > 0) {
-			text_width = mw;
-		}
-	}
-
-	if (align == NONE) {	// Let the WM manage the window
-			x = window.x;
-			y = window.y;
-
-			fixed_pos = 1;
-			fixed_size = 1;
-	}
-	if (*own_window && !fixed_pos) {
-		x += workarea[0];
-		y += workarea[1];
-
-		int border_total = get_border_total();
-		text_start_x = text_start_y = border_total;
-		window.x = x - border_total;
-		window.y = y - border_total;
-	} else
-	{
-		/* If window size doesn't match to workarea's size,
-		 * then window probably includes panels (gnome).
-		 * Blah, doesn't work on KDE. */
-		if (workarea[2] != window.width || workarea[3] != window.height) {
-			y += workarea[1];
-			x += workarea[0];
-		}
-
-		text_start_x = x;
-		text_start_y = y;
-	}
-	/* update lua window globals */
-	llua_update_window_table(text_start_x, text_start_y, text_width, text_height);
-}
-
 /* drawing stuff */
 
 static int cur_x, cur_y;	/* current x and y for drawing */
@@ -1044,20 +899,6 @@ static int text_size_updater(char *s, int special_index)
 
 static inline void set_foreground_color(long c)
 {
-#if 0 && BUILD_X11
-	if (*out_to_x) {
-#ifdef BUILD_ARGB
-		if (have_argb_visual) {
-			current_color = c | (*own_window_argb_value << 24);
-		} else {
-#endif /* BUILD_ARGB */
-			current_color = c;
-#ifdef BUILD_ARGB
-		}
-#endif /* BUILD_ARGB */
-		XSetForeground(display, window.gc, current_color);
-	}
-#endif /* BUILD_X11 */
 #ifdef BUILD_NCURSES
 	if (*out_to_ncurses) {
 		attron(COLOR_PAIR(c));
@@ -1128,11 +969,6 @@ static void draw_string(const char *s)
 	pos = 0;
 	added = 0;
 
-#ifdef BUILD_X11
-	if (*out_to_x) {
-		max = ((text_width - width_of_s) / get_string_width(" "));
-	}
-#endif /* BUILD_X11 */
 	/* This code looks for tabs in the text and coverts them to spaces.
 	 * The trick is getting the correct number of spaces, and not going
 	 * over the window's size without forcing the window larger. */
@@ -1178,14 +1014,6 @@ int draw_each_line_inner(char *s, int special_index, int last_special_applied)
 	char *p = s;
 	int last_special_needed = -1;
 	int orig_special_index = special_index;
-
-#ifdef BUILD_X11
-	if (*out_to_x) {
-		font_h = font_height();
-		cur_y += font_ascent();
-	}
-	cur_x = text_start_x;
-#endif /* BUILD_X11 */
 
 	while (*p) {
 		if (*p == SPECIAL_CHAR || last_special_applied > -1) {
@@ -1791,32 +1619,6 @@ void old_main_loop(void)
 
 			/* wait for X event or timeout */
 
-			if (!XPending(display)) {
-				fd_set fdsr;
-				struct timeval tv;
-				int s;
-				t = next_update_time - get_time();
-
-				t = std::min(std::max(t, 0.0), active_update_interval());
-
-				tv.tv_sec = (long) t;
-				tv.tv_usec = (long) (t * 1000000) % 1000000;
-				FD_ZERO(&fdsr);
-				FD_SET(ConnectionNumber(display), &fdsr);
-
-				s = select(ConnectionNumber(display) + 1, &fdsr, 0, 0, &tv);
-				if (s == -1) {
-					if (errno != EINTR) {
-						NORM_ERR("can't select(): %s", strerror(errno));
-					}
-				} else {
-					/* timeout */
-					if (s == 0) {
-						update_text();
-					}
-				}
-			}
-
 			if (need_to_update) {
 				int wx = window.x, wy = window.y;
 
@@ -1980,22 +1782,9 @@ void old_main_loop(void)
 						break;
 
 					default:
-#ifdef BUILD_XDAMAGE
-						if (ev.type == x11_stuff.event_base + XDamageNotify) {
-							XDamageNotifyEvent *dev = (XDamageNotifyEvent *) &ev;
-
-							XFixesSetRegion(display, x11_stuff.part, &dev->area, 1);
-							XFixesUnionRegion(display, x11_stuff.region2, x11_stuff.region2, x11_stuff.part);
-						}
-#endif /* BUILD_XDAMAGE */
 						break;
 				}
 			}
-
-#ifdef BUILD_XDAMAGE
-			XDamageSubtract(display, x11_stuff.damage, x11_stuff.region2, None);
-			XFixesSetRegion(display, x11_stuff.region2, 0, 0);
-#endif /* BUILD_XDAMAGE */
 
 				draw_stuff();
 			}
@@ -2025,17 +1814,6 @@ void old_main_loop(void)
 			case SIGTERM:
 				NORM_ERR("received SIGINT or SIGTERM to terminate. bye!");
 				terminate = 1;
-#if 0 && BUILD_X11
-				if (*out_to_x) {
-					XDestroyRegion(x11_stuff.region);
-					x11_stuff.region = NULL;
-#ifdef BUILD_XDAMAGE
-					XDamageDestroy(display, x11_stuff.damage);
-					XFixesDestroyRegion(display, x11_stuff.region2);
-					XFixesDestroyRegion(display, x11_stuff.part);
-#endif /* BUILD_XDAMAGE */
-				}
-#endif /* BUILD_X11 */
 				break;
 			default:
 				/* Reaching here means someone set a signal
@@ -2130,25 +1908,6 @@ static void reload_config(void)
 	initialisation(argc_copy, argv_copy);
 }
 
-#if 0 && BUILD_X11
-void clean_up_x11(void)
-{
-	if(window_created == 1) {
-		int border_total = get_border_total();
-
-		XClearArea(display, window.window, text_start_x - border_total,
-			text_start_y - border_total, text_width + 2*border_total,
-			text_height + 2*border_total, 0);
-	}
-	destroy_window();
-	free_fonts(*utf8_mode);
-	if(x11_stuff.region) {
-		XDestroyRegion(x11_stuff.region);
-		x11_stuff.region = NULL;
-	}
-}
-#endif
-
 void free_specials(special_t *&current) {
 	if (current) {
 		free_specials(current->next);
@@ -2165,12 +1924,6 @@ void clean_up_without_threads(void *memtofree1, void* memtofree2)
 	free_and_zero(memtofree2);
 
 	free_and_zero(info.cpu_usage);
-#if 0 && BUILD_X11
-	if(*out_to_x)
-		clean_up_x11();
-	else
-		fonts.clear();	//in set_default_configurations a font is set but not loaded
-#endif /* BUILD_X11 */
 
 	if (info.first_process) {
 		free_all_processes();
@@ -2234,41 +1987,6 @@ static void set_default_configurations(void)
 
 	info.users.number = 1;
 }
-
-#if 0 && BUILD_X11
-static void X11_create_window(void)
-{
-	if (*out_to_x) {
-		setup_fonts();
-		load_fonts(*utf8_mode);
-		update_text_area();	/* to position text/window on screen */
-
-		if (*own_window) {
-			if (not fixed_pos)
-				XMoveWindow(display, window.window, window.x, window.y);
-
-			set_transparent_background(window.window);
-		}
-
-		draw_stuff();
-
-		x11_stuff.region = XCreateRegion();
-#ifdef BUILD_XDAMAGE
-		if (!XDamageQueryExtension(display, &x11_stuff.event_base, &x11_stuff.error_base)) {
-			NORM_ERR("Xdamage extension unavailable");
-		}
-		x11_stuff.damage = XDamageCreate(display, window.window, XDamageReportNonEmpty);
-		x11_stuff.region2 = XFixesCreateRegionFromWindow(display, window.window, 0);
-		x11_stuff.part = XFixesCreateRegionFromWindow(display, window.window, 0);
-#endif /* BUILD_XDAMAGE */
-
-		selected_font = 0;
-		update_text_area();	/* to get initial size of the window */
-	}
-	/* setup lua window globals */
-	llua_setup_window_table(text_start_x, text_start_y, text_width, text_height);
-}
-#endif /* BUILD_X11 */
 
 void load_config_file()
 {
@@ -2567,9 +2285,6 @@ void initialisation(int argc, char **argv) {
 		}
 	}
 
-#if 0 && BUILD_X11
-	X11_create_window();
-#endif /* BUILD_X11 */
 	llua_setup_info(&info, active_update_interval());
 #ifdef BUILD_WEATHER_XOAP
 	xmlInitParser();
@@ -2670,11 +2385,6 @@ int main(int argc, char **argv)
 #endif
 
 	/* handle command line parameters that don't change configs */
-#ifdef BUILD_X11
-	if (!setlocale(LC_CTYPE, "")) {
-		NORM_ERR("Can't set the specified locale!\nCheck LANG, LC_CTYPE, LC_ALL.");
-	}
-#endif /* BUILD_X11 */
 	while (1) {
 		int c = getopt_long(argc, argv, getopt_string, longopts, NULL);
 

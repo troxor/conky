@@ -38,8 +38,6 @@
 
 #cmakedefine BUILD_X11 1
 
-#cmakedefine BUILD_XDAMAGE 1
-
 #cmakedefine BUILD_XFT 1
 
 #cmakedefine BUILD_ARGB 1

@@ -192,17 +192,6 @@ if(BUILD_X11)
 		set(conky_includes ${conky_includes} ${X11_INCLUDE_DIR})
 		set(conky_libs ${conky_libs} ${X11_LIBRARIES})
 
-		# check for Xdamage
-		if(BUILD_XDAMAGE)
-			if(NOT X11_Xdamage_FOUND)
-				message(FATAL_ERROR "Unable to find Xdamage library")
-			endif(NOT X11_Xdamage_FOUND)
-			if(NOT X11_Xfixes_FOUND)
-				message(FATAL_ERROR "Unable to find Xfixes library")
-			endif(NOT X11_Xfixes_FOUND)
-			set(conky_libs ${conky_libs} ${X11_Xdamage_LIB} ${X11_Xfixes_LIB})
-		endif(BUILD_XDAMAGE)
-
 		# check for Xft
 		if(BUILD_XFT)
 			find_path(freetype_INCLUDE_PATH freetype/config/ftconfig.h ${INCLUDE_SEARCH_PATH}
