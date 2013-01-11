@@ -47,6 +47,10 @@
 #ifdef BUILD_XFT
 #include <X11/Xft/Xft.h>
 #endif
+#ifdef BUILD_XDBE
+#include <X11/extensions/Xdbe.h>
+#endif
+
 
 // XXX: TEMPORARY stub variables
 Display *display;

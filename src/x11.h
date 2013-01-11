@@ -30,10 +30,6 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 
-#ifdef BUILD_XDBE
-#include <X11/extensions/Xdbe.h>
-#endif
-
 #include "output-method.hh"
 #include "setting.hh"
 #include "unicode.hh"

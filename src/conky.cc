@@ -346,26 +346,6 @@ static const char *suffixes[] = {
 };
 
 
-#if 0 && BUILD_X11
-
-static void X11_create_window(void);
-
-struct _x11_stuff_s {
-	Region region;
-#ifdef BUILD_XDAMAGE
-	Damage damage;
-	XserverRegion region2, part;
-	int event_base, error_base;
-#endif
-} x11_stuff;
-
-/* text size */
-
-static int text_start_x, text_start_y;	/* text start position in window */
-static int text_width = 1, text_height = 1; /* initially 1 so no zero-sized window is created */
-
-#endif /* BUILD_X11 */
-
 /* struct that has all info to be shared between
  * instances of the same text object */
 struct information info;
@@ -1749,17 +1729,6 @@ static void draw_stuff(void)
 	draw_mode = FG;
 	draw_text();
 	llua_draw_post_hook();
-#if defined(BUILD_X11)
-#if defined(BUILD_XDBE)
-	if (*out_to_x) {
-		xdbe_swap_buffers();
-	}
-#else
-	if (*out_to_x) {
-		xpmdb_swap_buffers();
-	}
-#endif
-#endif /* BUILD_X11 && BUILD_XDBE */
 	if(overwrite_fpointer) {
 		fclose(overwrite_fpointer);
 		overwrite_fpointer = 0;
@@ -1769,32 +1738,6 @@ static void draw_stuff(void)
 		append_fpointer = 0;
 	}
 }
-
-#ifdef BUILD_X11
-static void clear_text(int exposures)
-{
-#ifdef BUILD_XDBE
-	if (*use_xdbe) {
-		/* The swap action is XdbeBackground, which clears */
-		return;
-	} else
-#else
-	if (*use_xpmdb) {
-		return;
-	} else
-#endif
-	if (display && window.window) { // make sure these are !null
-		/* there is some extra space for borders and outlines */
-		int border_total = get_border_total();
-
-		XClearArea(display, window.window, text_start_x - border_total, 
-			text_start_y - border_total, text_width + 2*border_total,
-			text_height + 2*border_total, exposures ? True : 0);
-	}
-}
-#endif /* BUILD_X11 */
-
-static int need_to_update;
 
 /* update_text() generates new text and clears old text area */
 static void update_text(void)
@@ -1885,48 +1828,6 @@ void old_main_loop(void)
 					int changed = 0;
 					int border_total = get_border_total();
 
-					/* resize window if it isn't right size */
-					if (!fixed_size
-							&& (text_width + 2*border_total != window.width
-								|| text_height + 2*border_total != window.height)) {
-						window.width = text_width + 2*border_total;
-						window.height = text_height + 2*border_total;
-						draw_stuff(); /* redraw everything in our newly sized window */
-						XResizeWindow(display, window.window, window.width,
-								window.height); /* resize window */
-						set_transparent_background(window.window);
-#ifdef BUILD_XDBE
-						/* swap buffers */
-						xdbe_swap_buffers();
-#else
-						if (*use_xpmdb) {
-
-							XFreePixmap(display, window.back_buffer);
-							window.back_buffer = XCreatePixmap(display,
-								window.window, window.width, window.height, DefaultDepth(display, screen));
-						
-							if (window.back_buffer != None) {
-								window.drawable = window.back_buffer;
-							} else {
-								// this is probably reallllly bad
-								NORM_ERR("Failed to allocate back buffer");
-							}
-							XSetForeground(display, window.gc, 0);
-							XFillRectangle(display, window.drawable, window.gc, 0, 0, window.width, window.height);
-						}
-#endif
-
-						changed++;
-						/* update lua window globals */
-						llua_update_window_table(text_start_x, text_start_y, text_width, text_height);
-					}
-
-					/* move window if it isn't in right position */
-					if (!fixed_pos && (window.x != wx || window.y != wy)) {
-						XMoveWindow(display, window.window, window.x, window.y);
-						changed++;
-					}
-
 					/* update struts */
 					if (changed && *own_window_type == TYPE_PANEL) {
 						int sidenum = -1;
@@ -1968,21 +1869,6 @@ void old_main_loop(void)
 				}
 
 				clear_text(1);
-
-#if defined(BUILD_XDBE)
-				if (*use_xdbe) {
-#else
-				if (*use_xpmdb) {
-#endif
-					XRectangle r;
-					int border_total = get_border_total();
-
-					r.x = text_start_x - border_total;
-					r.y = text_start_y - border_total;
-					r.width = text_width + 2*border_total;
-					r.height = text_height + 2*border_total;
-					XUnionRectWithRegion(&r, x11_stuff.region, x11_stuff.region);
-				}
 			}
 
 			/* handle X events */
@@ -1991,17 +1877,6 @@ void old_main_loop(void)
 
 				XNextEvent(display, &ev);
 				switch (ev.type) {
-					case Expose:
-					{
-						XRectangle r;
-						r.x = ev.xexpose.x;
-						r.y = ev.xexpose.y;
-						r.width = ev.xexpose.width;
-						r.height = ev.xexpose.height;
-						XUnionRectWithRegion(&r, x11_stuff.region, x11_stuff.region);
-						break;
-					}
-
 					case PropertyNotify:
 					{
 						if ( ev.xproperty.state == PropertyNewValue ) {
@@ -2122,37 +1997,7 @@ void old_main_loop(void)
 			XFixesSetRegion(display, x11_stuff.region2, 0, 0);
 #endif /* BUILD_XDAMAGE */
 
-			/* XDBE doesn't seem to provide a way to clear the back buffer
-			 * without interfering with the front buffer, other than passing
-			 * XdbeBackground to XdbeSwapBuffers. That means that if we're
-			 * using XDBE, we need to redraw the text even if it wasn't part of
-			 * the exposed area. OTOH, if we're not going to call draw_stuff at
-			 * all, then no swap happens and we can safely do nothing. */
-
-			if (!XEmptyRegion(x11_stuff.region)) {
-#if defined(BUILD_XDBE)
-				if (*use_xdbe) {
-#else
-				if (*use_xpmdb) {
-#endif
-					XRectangle r;
-					int border_total = get_border_total();
-
-					r.x = text_start_x - border_total;
-					r.y = text_start_y - border_total;
-					r.width = text_width + 2*border_total;
-					r.height = text_height + 2*border_total;
-					XUnionRectWithRegion(&r, x11_stuff.region, x11_stuff.region);
-				}
-				XSetRegion(display, window.gc, x11_stuff.region);
-#ifdef BUILD_XFT
-				if (*use_xft) {
-					XftDrawSetClip(window.xftdraw, x11_stuff.region);
-				}
-#endif
 				draw_stuff();
-				XDestroyRegion(x11_stuff.region);
-				x11_stuff.region = XCreateRegion();
 			}
 		} else {
 #endif /* BUILD_X11 */
