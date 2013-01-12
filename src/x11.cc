@@ -265,7 +265,6 @@ namespace conky {
 	range_config_setting<int>          border_width("border_width", 0,
 														std::numeric_limits<int>::max(), 1, true);
 
-	simple_config_setting<bool>        set_transparent("own_window_transparent", false, false);
 	simple_config_setting<std::string> own_window_class("own_window_class",
 																PACKAGE_NAME, false);
 
