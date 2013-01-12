@@ -33,6 +33,7 @@
 #include "output-method.hh"
 #include "setting.hh"
 #include "unicode.hh"
+#include "util.hh"
 #include "colours.h"
 
 #define ATOM(a) XInternAtom(display, #a, False)
@@ -94,13 +95,6 @@ namespace conky {
 
 	class x11_output: public output_method {
 		class true_colour_factory;
-		class non_copyable {
-			non_copyable(const non_copyable &) = delete;
-			const non_copyable& operator=(const non_copyable &) = delete;
-
-		public:
-			non_copyable() { }
-		};
 
 	public:
 		class colour: private non_copyable {
