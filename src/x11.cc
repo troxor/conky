@@ -1407,7 +1407,7 @@ namespace conky {
 				drawable->draw_rectangle(equal_point(*border_outer_margin + *border_width/2),
 						size - equal_point(*border_outer_margin*2+*border_width));
 			}
-			get_global_text()->draw(*this, point(b, b), size - point(b, b));
+			get_global_text()->draw(*this, point(b, b), size - point(2*b, 2*b));
 			drawable->swap();
 		}
 	}
