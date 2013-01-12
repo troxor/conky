@@ -212,8 +212,6 @@ namespace conky {
 		Visual *visual;
 		int depth;
 		Colormap colourmap;
-		point window_size;
-		point position;
 		std::unique_ptr<buffer> drawable;
 
 		std::unique_ptr<font_factory> fonts;

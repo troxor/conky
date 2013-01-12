@@ -441,11 +441,6 @@ static conky::simple_config_setting<bool> draw_graph_borders("draw_graph_borders
 static conky::simple_config_setting<bool> draw_shades("draw_shades", true, false);
 static conky::simple_config_setting<bool> draw_outline("draw_outline", false, false);
 
-#ifdef OWN_WINDOW
-/* fixed size/pos is set if wm/user changes them */
-static int fixed_size = 0, fixed_pos = 0;
-#endif
-
 static conky::range_config_setting<int> minimum_height("minimum_height", 0,
 											std::numeric_limits<int>::max(), 5, true);
 static conky::range_config_setting<int> minimum_width("minimum_width", 0,
@@ -1691,52 +1686,6 @@ void old_main_loop(void)
 						/* make background transparent */
 						if (*own_window) {
 							set_transparent_background(window.window);
-						}
-						break;
-
-					case ConfigureNotify:
-						if (*own_window) {
-							/* if window size isn't what expected, set fixed size */
-							if (ev.xconfigure.width != window.width
-									|| ev.xconfigure.height != window.height) {
-								if (window.width != 0 && window.height != 0) {
-									fixed_size = 1;
-								}
-
-								/* clear old stuff before screwing up
-								 * size and pos */
-								clear_text(1);
-
-								{
-									XWindowAttributes attrs;
-									if (XGetWindowAttributes(display,
-											window.window, &attrs)) {
-										window.width = attrs.width;
-										window.height = attrs.height;
-									}
-								}
-
-								int border_total = get_border_total();
-
-								text_width = window.width - 2*border_total;
-								text_height = window.height - 2*border_total;
-								int mw = *maximum_width;
-								if (text_width > mw && mw > 0) {
-									text_width = mw;
-								}
-							}
-
-							/* if position isn't what expected, set fixed pos
-							 * total_updates avoids setting fixed_pos when window
-							 * is set to weird locations when started */
-							/* // this is broken
-							if (total_updates >= 2 && !fixed_pos
-									&& (window.x != ev.xconfigure.x
-									|| window.y != ev.xconfigure.y)
-									&& (ev.xconfigure.x != 0
-									|| ev.xconfigure.y != 0)) {
-								fixed_pos = 1;
-							} */
 						}
 						break;
 

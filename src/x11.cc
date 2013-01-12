@@ -413,47 +413,81 @@ namespace conky {
 	protected:
 		Display &display;
 		const Window window;
+		point size;
+		point position;
 		point text_pos;
 
 	public:
-		window_handler(Display &display_, Window window_) : display(display_), window(window_) { }
+		window_handler(Display &display_, Window window_)
+			: display(display_), window(window_), size(1, 1)
+		{ }
+
 		virtual ~window_handler() { }
 
 		Window get_window() { return window; }
 		const point& get_text_pos() const { return text_pos; }
-		virtual void resize(const point &size) = 0;
-		virtual void move(const point &pos) = 0;
+		const point& get_size() const { return size; }
+		const point& get_position() const { return position; }
+		virtual void resize(const point &size_) { size = size_; }
+		virtual void move(const point &position_) { position = position_; }
 		virtual void clear() = 0;
-		virtual void set_background() { }
+		virtual void handle_configure(const XConfigureEvent &) { }
 	};
 
 	class x11_output::root_window_handler: public window_handler {
-		point size;
-
 	public:
 		root_window_handler(Display &display_, Window window_)
 			: window_handler(display_, window_)
-		{ }
+		{
+			XWindowAttributes attrs;
+			if (XGetWindowAttributes(&display, window, &attrs)) {
+				size = { attrs.width, attrs.height };
+			}
+		}
 
-		virtual void resize(const point &size_) { size = size_; }
-		virtual void move(const point &pos) { text_pos = pos; }
+		virtual void move(const point &position_) { text_pos = position_; }
 		virtual void clear() { XClearArea(&display, window, 0, 0, size.x, size.y, False); }
 	};
 
 	class x11_output::own_window_handler: public window_handler {
 		const int screen;
+		bool fixed_size;
+		bool fixed_pos;
+		uint8_t pos_updates;
+		enum { MAX_POS_UPDATES = 3 };
 
 	public:
 		own_window_handler(Display &display_, int screen_, Window window_)
-			: window_handler(display_, window_), screen(screen_)
+			: window_handler(display_, window_), screen(screen_), fixed_size(false),
+			  fixed_pos(false), pos_updates(0)
 		{ }
 		~own_window_handler() { XDestroyWindow(&display, window); }
 
-		virtual void resize(const point &size) { XResizeWindow(&display, window, size.x, size.y); }
-		virtual void move(const point &pos) { XMoveWindow(&display, window, pos.x, pos.y); }
+		virtual void resize(const point &size_)
+		{
+			if(fixed_size || size_ == size)
+				return;
+
+			window_handler::resize(size_);
+			XResizeWindow(&display, window, size.x, size.y);
+			set_background();
+		}
+
+		virtual void move(const point &position_)
+		{
+			if(fixed_pos || position_ == position)
+				return;
+
+			if(pos_updates < MAX_POS_UPDATES)
+				++pos_updates;
+			XMoveWindow(&display, window, position_.x, position_.y);
+			window_handler::move(position_);
+		}
+
 		virtual void clear() { XClearWindow(&display, window); }
 
-		virtual void set_background();
+		void set_background();
+		virtual void handle_configure(const XConfigureEvent &e);
 	};
 
 	/* if no argb visual is configured sets background to ParentRelative for the Window and all
@@ -477,13 +511,28 @@ namespace conky {
 		}
 	}
 
+	void x11_output::own_window_handler::handle_configure(const XConfigureEvent &e)
+	{
+		point size_(e.width, e.height);
+		if(size_ != size) {
+			size = size_;
+			fixed_size = true;
+		}
+
+		point position_(e.x, e.y);
+		if(position_ != position) {
+			position = position_;
+			if(pos_updates >= MAX_POS_UPDATES)
+				fixed_pos = true;
+		}
+	}
+
 	class x11_output::buffer: private non_copyable {
 	public:
 		typedef std::function<void ()> DrawableChanged;
 
 	private:
 		Drawable drawable;
-		DrawableChanged drawable_changed;
 		std::shared_ptr<colour> foreground;
 
 		static std::unique_ptr<buffer> try_xdbe(Display &display, window_handler &window);
@@ -508,8 +557,7 @@ namespace conky {
 		void change(uint64_t value, unsigned long mask)
 		{ change_gc(gc, value, mask); }
 
-		void set_drawable(Drawable drawable_)
-		{ drawable = drawable_; if(drawable_changed) drawable_changed(); }
+		void set_drawable(Drawable drawable_) { drawable = drawable_; }
 
 		buffer(Display &display_, window_handler &window_, Drawable drawable_)
 			: drawable(drawable_), display(display_),  window(window_)
@@ -548,12 +596,8 @@ namespace conky {
 			XDrawRectangle(&display, drawable, gc, pos.x, pos.y, size.x, size.y);
 		}
 
-		void set_on_drawable_changed(const DrawableChanged &drawable_changed_)
-		{ drawable_changed = drawable_changed_; }
-
 		static std::unique_ptr<buffer>
-		create(buffer_type type, Display &display, window_handler &window, point size,
-				unsigned int depth);
+		create(buffer_type type, Display &display, window_handler &window, unsigned int depth);
 	};
 
 	class x11_output::single_buffer: public buffer {
@@ -652,7 +696,7 @@ namespace conky {
 		}
 
 	public:
-		pixmap_buffer(Display &display_, window_handler &window_, point size_, unsigned int depth_);
+		pixmap_buffer(Display &display_, window_handler &window_, unsigned int depth_);
 
 		virtual ~pixmap_buffer()
 		{
@@ -686,10 +730,10 @@ namespace conky {
 	const point x11_output::pixmap_buffer::dummy_pos(0, 0);
 
 	x11_output::pixmap_buffer::pixmap_buffer(Display &display_, window_handler &window_,
-											 point size_, unsigned int depth_)
-		: buffer(display_, window_,
-				XCreatePixmap(&display_, window_.get_window(), size_.x, size_.y, depth_)),
-		  size(size_), depth(depth_)
+											 unsigned int depth_)
+		: buffer(display_, window_, XCreatePixmap(&display_, window_.get_window(),
+									window.get_size().x, window.get_size().y, depth_)),
+		  size(window.get_size()), depth(depth_)
 	{
 		background = create_pixmap();
 
@@ -704,6 +748,9 @@ namespace conky {
 
 	void x11_output::pixmap_buffer::resize(const point &size_)
 	{
+		if(size_ == size)
+			return;
+
 		XFreePixmap(&display, get_drawable());
 		XFreePixmap(&display, background );
 
@@ -716,7 +763,7 @@ namespace conky {
 
 	std::unique_ptr<x11_output::buffer>
 	x11_output::buffer::create(buffer_type type, Display &display, window_handler &window,
-							   point size, unsigned int depth) {
+							   unsigned int depth) {
 
 		std::unique_ptr<buffer> ret;
 		const char *ctype;
@@ -730,7 +777,7 @@ namespace conky {
 			if(ret)
 				ctype = "XDBE double";
 			else {
-				ret.reset(new pixmap_buffer(display, window, size, depth));
+				ret.reset(new pixmap_buffer(display, window, depth));
 				ctype = "pixmap double";
 			}
 		}
@@ -763,6 +810,7 @@ namespace conky {
 
 	public:
 		virtual ~font_factory() { }
+		virtual void drawable_changed() { }
 		virtual std::shared_ptr<font> get_font(const char *name) = 0;
 		virtual std::shared_ptr<font> get_default_font() = 0;
 	};
@@ -850,8 +898,6 @@ namespace conky {
 		int screen;
 		XftDraw *draw;
 
-		void drawable_changed() { XftDrawChange(draw, drawable.get_drawable()); }
-
 		class xft_font: public font {
 			xft_font_factory &factory;
 			XftFont *xf;
@@ -894,14 +940,17 @@ namespace conky {
 						reinterpret_cast<const FcChar8 *>(text.c_str()), text.length());
 			}
 		};
+
 	public:
 		xft_font_factory(Display &display_, int screen_, Visual &visual, Colormap colourmap,
 				buffer &drawable_)
 			: font_factory(display_, drawable_), screen(screen_),
 			  draw(XftDrawCreate(&display_, drawable.get_drawable(), &visual, colourmap))
-		{ drawable.set_on_drawable_changed(std::bind(&xft_font_factory::drawable_changed, this)); }
+		{ }
 
 		virtual ~xft_font_factory() { XftDrawDestroy(draw); }
+
+		virtual void drawable_changed() { XftDrawChange(draw, drawable.get_drawable()); }
 
 		virtual std::shared_ptr<font> get_font(const char *name)
 		{
@@ -955,12 +1004,6 @@ namespace conky {
 
 	void x11_output::use_root_window()
 	{
-		XWindowAttributes attrs;
-
-		if (XGetWindowAttributes(display, desktop, &attrs)) {
-			window_size = { attrs.width, attrs.height };
-		}
-
 		fprintf(stderr, PACKAGE_NAME": drawing to desktop window\n");
 		window.reset(new root_window_handler(*display, desktop));
 
@@ -975,7 +1018,6 @@ namespace conky {
 			attrs.event_mask |= ButtonPressMask | ButtonReleaseMask;
 
 		unsigned long flags = CWBorderPixel | CWColormap | CWOverrideRedirect | CWBackPixel;
-		window_size = { 1, 1 };
 
 		Window w = XCreateWindow(display, override ? desktop : root, 0, 0, 1, 1, 0, depth,
 				InputOutput, visual, flags, &attrs);
@@ -1299,7 +1341,7 @@ namespace conky {
 
 	x11_output::buffer_type x11_output::setup_buffer(buffer_type type)
 	{
-		drawable = buffer::create(type, *display, *window, window_size, depth);
+		drawable = buffer::create(type, *display, *window, depth);
 		colours = colour_factory::create(*display, *visual, colourmap);
 		fg_colour = colours->get_colour("white");
 		drawable->set_foreground(fg_colour);
@@ -1356,14 +1398,12 @@ namespace conky {
 			point size = get_global_text()->size(*this);
 			int b = *border_inner_margin + *border_width + *border_outer_margin;
 			size = max(equal_point(1), size + equal_point(2*b));
-			if(size != window_size) {
-				window->resize(size);
-				window->set_background();
-				drawable->resize(size);
-				window_size = size;
-			}
+
+			window->resize(size);
+			drawable->resize(size);
 
 			point pos;
+			const point &window_size = window->get_size();
 			alignment align = *text_alignment;
 			switch (align) {
 				case TOP_LEFT: case TOP_RIGHT: case TOP_MIDDLE:
@@ -1391,10 +1431,7 @@ namespace conky {
 					pos.x = (display_size.x - window_size.x) / 2;
 					break;
 			}
-			if(position != pos) {
-				window->move(pos);
-				position = pos;
-			}
+			window->move(pos);
 
 			drawable->clear();
 			if(*border_width > 0) {
@@ -1414,17 +1451,22 @@ namespace conky {
 
 	void x11_output::process_events(bool &need_redraw)
 	{
-		point ul = window_size;
+		point ul = window->get_size();
 		point lr(0,0);
 
 		while(XPending(display)) {
 			XEvent ev;
 			XNextEvent(display, &ev);
 			switch(ev.type) {
+				case ConfigureNotify:
+					window->handle_configure(ev.xconfigure);
+					fonts->drawable_changed();
+					break;
 				case Expose:
 					XExposeEvent &eev = ev.xexpose;
 					ul = min(ul, { eev.x, eev.y });
 					lr = max(lr, { eev.x+eev.width, eev.y+eev.height } );
+					break;
 			}
 		}
 
