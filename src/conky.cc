@@ -1682,13 +1682,6 @@ void old_main_loop(void)
 						break;
 					}
 
-					case ReparentNotify:
-						/* make background transparent */
-						if (*own_window) {
-							set_transparent_background(window.window);
-						}
-						break;
-
 					case ButtonPress:
 						if (*own_window) {
 							/* if an ordinary window with decorations */

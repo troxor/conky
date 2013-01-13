@@ -432,6 +432,7 @@ namespace conky {
 		virtual void move(const point &position_) { position = position_; }
 		virtual void clear() = 0;
 		virtual void handle_configure(const XConfigureEvent &) { }
+		virtual void handle_reparent(const XReparentEvent &) { }
 	};
 
 	class x11_output::root_window_handler: public window_handler {
@@ -488,6 +489,7 @@ namespace conky {
 
 		void set_background();
 		virtual void handle_configure(const XConfigureEvent &e);
+		virtual void handle_reparent(const XReparentEvent &) { set_background(); }
 	};
 
 	/* if no argb visual is configured sets background to ParentRelative for the Window and all
@@ -1461,6 +1463,9 @@ namespace conky {
 				case ConfigureNotify:
 					window->handle_configure(ev.xconfigure);
 					fonts->drawable_changed();
+					break;
+				case ReparentNotify:
+					window->handle_reparent(ev.xreparent);
 					break;
 				case Expose:
 					XExposeEvent &eev = ev.xexpose;
