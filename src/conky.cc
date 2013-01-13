@@ -1682,47 +1682,6 @@ void old_main_loop(void)
 						break;
 					}
 
-					case ButtonPress:
-						if (*own_window) {
-							/* if an ordinary window with decorations */
-							if ((*own_window_type == TYPE_NORMAL &&
-										not TEST_HINT(*own_window_hints,
-													HINT_UNDECORATED)) ||
-									*own_window_type == TYPE_DESKTOP) {
-								/* allow conky to hold input focus. */
-								break;
-							} else {
-								/* forward the click to the desktop window */
-								XUngrabPointer(display, ev.xbutton.time);
-								ev.xbutton.window = window.desktop;
-								ev.xbutton.x = ev.xbutton.x_root;
-								ev.xbutton.y = ev.xbutton.y_root;
-								XSendEvent(display, ev.xbutton.window, False,
-									ButtonPressMask, &ev);
-								XSetInputFocus(display, ev.xbutton.window,
-									RevertToParent, ev.xbutton.time);
-							}
-						}
-						break;
-
-					case ButtonRelease:
-						if (*own_window) {
-							/* if an ordinary window with decorations */
-							if ((*own_window_type == TYPE_NORMAL) &&
-									not TEST_HINT(*own_window_hints, HINT_UNDECORATED)) {
-								/* allow conky to hold input focus. */
-								break;
-							} else {
-								/* forward the release to the desktop window */
-								ev.xbutton.window = window.desktop;
-								ev.xbutton.x = ev.xbutton.x_root;
-								ev.xbutton.y = ev.xbutton.y_root;
-								XSendEvent(display, ev.xbutton.window, False,
-									ButtonReleaseMask, &ev);
-							}
-						}
-						break;
-
 					default:
 						break;
 				}

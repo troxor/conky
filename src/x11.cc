@@ -433,6 +433,7 @@ namespace conky {
 		virtual void clear() = 0;
 		virtual void handle_configure(const XConfigureEvent &) { }
 		virtual void handle_reparent(const XReparentEvent &) { }
+		virtual void handle_button(bool /*press*/, XButtonEvent &&) { }
 	};
 
 	class x11_output::root_window_handler: public window_handler {
@@ -452,15 +453,16 @@ namespace conky {
 
 	class x11_output::own_window_handler: public window_handler {
 		const int screen;
+		const Window desktop;
 		bool fixed_size;
 		bool fixed_pos;
 		uint8_t pos_updates;
 		enum { MAX_POS_UPDATES = 3 };
 
 	public:
-		own_window_handler(Display &display_, int screen_, Window window_)
-			: window_handler(display_, window_), screen(screen_), fixed_size(false),
-			  fixed_pos(false), pos_updates(0)
+		own_window_handler(Display &display_, int screen_, Window desktop_, Window window_)
+			: window_handler(display_, window_), screen(screen_), desktop(desktop_),
+		  	  fixed_size(false), fixed_pos(false), pos_updates(0)
 		{ }
 		~own_window_handler() { XDestroyWindow(&display, window); }
 
@@ -490,6 +492,7 @@ namespace conky {
 		void set_background();
 		virtual void handle_configure(const XConfigureEvent &e);
 		virtual void handle_reparent(const XReparentEvent &) { set_background(); }
+		virtual void handle_button(bool press, XButtonEvent &&e);
 	};
 
 	/* if no argb visual is configured sets background to ParentRelative for the Window and all
@@ -529,10 +532,28 @@ namespace conky {
 		}
 	}
 
-	class x11_output::buffer: private non_copyable {
-	public:
-		typedef std::function<void ()> DrawableChanged;
+	void x11_output::own_window_handler::handle_button(bool press, XButtonEvent &&e)
+	{
+		/* if an ordinary window with decorations */
+		if((*own_window_type == TYPE_NORMAL && not (*own_window_hints & HINT_UNDECORATED)) ||
+				*own_window_type == TYPE_DESKTOP) {
+			/* allow conky to hold input focus. */
+			return;
+		}
+		
+		/* forward the click to the desktop window */
+		if(press)
+			XUngrabPointer(&display, e.time);
+		e.window = desktop;
+		e.x = e.x_root;
+		e.y = e.y_root;
+		XSendEvent(&display, e.window, False, press?ButtonPressMask:ButtonReleaseMask, 
+				reinterpret_cast<XEvent *>(&e));
+		if(press)
+			XSetInputFocus(&display, e.window, RevertToParent, e.time);
+	}
 
+	class x11_output::buffer: private non_copyable {
 	private:
 		Drawable drawable;
 		std::shared_ptr<colour> foreground;
@@ -1023,7 +1044,7 @@ namespace conky {
 
 		Window w = XCreateWindow(display, override ? desktop : root, 0, 0, 1, 1, 0, depth,
 				InputOutput, visual, flags, &attrs);
-		window.reset(new own_window_handler(*display, screen, w));
+		window.reset(new own_window_handler(*display, screen, desktop, w));
 
 		XLowerWindow(display, window->get_window());
 	}
