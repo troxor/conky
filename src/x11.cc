@@ -251,9 +251,16 @@ namespace conky {
 	 *                          -> border_*, own_window_*, etc -> own_window -> double_buffer ->  imlib_cache_size
 	 */
 
-	simple_config_setting<alignment>   text_alignment("alignment", BOTTOM_LEFT, false);
-	conky::simple_config_setting<int>  gap_x("gap_x", 5, true);
-	conky::simple_config_setting<int>  gap_y("gap_y", 60, true);
+	simple_config_setting<alignment>   text_alignment("alignment", BOTTOM_LEFT, true);
+	simple_config_setting<int>         gap_x("gap_x", 5, true);
+	simple_config_setting<int>         gap_y("gap_y", 60, true);
+
+	range_config_setting<short>        minimum_height("minimum_height", 1,
+											std::numeric_limits<short>::max(), 5, true);
+	range_config_setting<short>        minimum_width("minimum_width", 1,
+											std::numeric_limits<short>::max(), 5, true);
+	range_config_setting<short>        maximum_width("maximum_width", 0,
+											std::numeric_limits<short>::max(), 0, true);
 
 	simple_config_setting<std::string> display_name("display", std::string(), false);
 	priv::out_to_x_setting                    out_to_x;
@@ -1420,7 +1427,10 @@ namespace conky {
 
 			point size = get_global_text()->size(*this);
 			int b = *border_inner_margin + *border_width + *border_outer_margin;
-			size = max(equal_point(1), size + equal_point(2*b));
+			size += equal_point(2*b);
+			if(*maximum_width > 0 && size.x > *maximum_width)
+				size.x = *maximum_width;
+			size = max(point(*minimum_width, *minimum_height), size);
 
 			window->resize(size);
 			drawable->resize(size);

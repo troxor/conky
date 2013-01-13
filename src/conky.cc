@@ -441,13 +441,6 @@ static conky::simple_config_setting<bool> draw_graph_borders("draw_graph_borders
 static conky::simple_config_setting<bool> draw_shades("draw_shades", true, false);
 static conky::simple_config_setting<bool> draw_outline("draw_outline", false, false);
 
-static conky::range_config_setting<int> minimum_height("minimum_height", 0,
-											std::numeric_limits<int>::max(), 5, true);
-static conky::range_config_setting<int> minimum_width("minimum_width", 0,
-											std::numeric_limits<int>::max(), 5, true);
-static conky::range_config_setting<int> maximum_width("maximum_width", 0,
-											std::numeric_limits<int>::max(), 0, true);
-
 static bool isutf8(const char* envvar) {
 	char *s = getenv(envvar);
 	if(s) {
@@ -880,10 +873,6 @@ static int text_size_updater(char *s, int special_index)
 
 	if (w > text_width) {
 		text_width = w;
-	}
-	int mw = *maximum_width;
-	if (text_width > mw && mw > 0) {
-		text_width = mw;
 	}
 
 	text_height += last_font_height;
