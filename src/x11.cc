@@ -993,7 +993,7 @@ namespace conky {
 
 	x11_output::x11_output(uint32_t period, const std::string &display_)
 		: output_method(period, true), display(NULL), screen(0), root(0),
-  		  desktop(0), visual(NULL), depth(0), colourmap(0), drawable(0)
+		  desktop(0), visual(NULL), depth(0), colourmap(0)
 
 	{
 		// passing NULL to XOpenDisplay should open the default display
