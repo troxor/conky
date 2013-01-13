@@ -592,7 +592,7 @@ void human_readable(long long num, char *buf, int size)
 
 	/* Possibly just output as usual, for example for stdout usage */
 	if (not *format_human_readable) {
-		spaced_print(buf, size, "%d", 6, round_to_int(num));
+		spaced_print(buf, size, "%lld", 6, num);
 		return;
 	}
 	if (*short_units) {
@@ -1512,8 +1512,8 @@ static void draw_stuff(void)
 		if(!append_fpointer)
 			NORM_ERR("Cannot append to '%s'", *append_file.c_str());
 	}
-	llua_draw_pre_hook();
 #ifdef BUILD_X11
+	llua_draw_pre_hook();
 	if (*out_to_x) {
 		selected_font = 0;
 		if (*draw_shades && !*draw_outline) {
@@ -1551,7 +1551,9 @@ static void draw_stuff(void)
 #endif /* BUILD_X11 */
 	draw_mode = FG;
 	draw_text();
+#if defined(BUILD_X11)
 	llua_draw_post_hook();
+#endif /* BUILD_X11 */
 	if(overwrite_fpointer) {
 		fclose(overwrite_fpointer);
 		overwrite_fpointer = 0;
@@ -2080,6 +2082,7 @@ void initialisation(int argc, char **argv) {
 	while (1) {
 		int c = getopt_long(argc, argv, getopt_string, longopts, NULL);
 		int startup_pause;
+		char *conv_end;
 
 		if (c == -1) {
 			break;
@@ -2127,22 +2130,26 @@ void initialisation(int argc, char **argv) {
 				break;
 #endif
 			case 'u':
-				state->pushstring(optarg);
+				state->pushinteger(strtol(optarg, &conv_end, 10));
+				if(*conv_end != 0) { CRIT_ERR(NULL, NULL, "'%s' is a wrong update-interval", optarg); }
 				update_interval.lua_set(*state);
 				break;
 
 			case 'i':
-				state->pushstring(optarg);
+				state->pushinteger(strtol(optarg, &conv_end, 10));
+				if(*conv_end != 0) { CRIT_ERR(NULL, NULL, "'%s' is a wrong number of update-times", optarg); }
 				total_run_times.lua_set(*state);
 				break;
 #if 0
 			case 'x':
-				state->pushstring(optarg);
+				state->pushinteger(strtol(optarg, &conv_end, 10));
+				if(*conv_end != 0) { CRIT_ERR(NULL, NULL, "'%s' is a wrong value for the X-position", optarg); }
 				gap_x.lua_set(*state);
 				break;
 
 			case 'y':
-				state->pushstring(optarg);
+				state->pushinteger(strtol(optarg, &conv_end, 10));
+				if(*conv_end != 0) { CRIT_ERR(NULL, NULL, "'%s' is a wrong value for the Y-position", optarg); }
 				gap_y.lua_set(*state);
 				break;
 #endif /* BUILD_X11 */

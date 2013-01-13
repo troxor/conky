@@ -79,6 +79,10 @@
 #define NBD_MAJOR 43
 #endif
 
+#if !defined(DM_MAJOR)
+#define DM_MAJOR 253
+#endif
+
 #ifdef BUILD_WLAN
 #include <iwlib.h>
 #endif
@@ -512,12 +516,12 @@ int update_net_stats(void)
 		if (iw_get_basic_config(skfd, s, &(winfo->b)) > -1) {
 
 			// set present winfo variables
+			if (iw_get_range_info(skfd, s, &(winfo->range)) >= 0) {
+				winfo->has_range = 1;
+			}
 			if (iw_get_stats(skfd, s, &(winfo->stats),
 					&winfo->range, winfo->has_range) >= 0) {
 				winfo->has_stats = 1;
-			}
-			if (iw_get_range_info(skfd, s, &(winfo->range)) >= 0) {
-				winfo->has_range = 1;
 			}
 			if (iw_get_ext(skfd, s, SIOCGIWAP, &wrq) >= 0) {
 				winfo->has_ap_addr = 1;
@@ -2435,7 +2439,8 @@ int update_diskio(void)
 		 *
 		 * XXX: ignore devices which are part of a SW RAID (MD_MAJOR) */
 		if (col_count == 5 && major != LVM_BLK_MAJOR && major != NBD_MAJOR
-				&& major != RAMDISK_MAJOR && major != LOOP_MAJOR) {
+				&& major != RAMDISK_MAJOR && major != LOOP_MAJOR
+				&& major != DM_MAJOR) {
 			/* check needed for kernel >= 2.6.31, see sf #2942117 */
 			if (is_disk(devbuf)) {
 				total_reads += reads;
@@ -2644,6 +2649,9 @@ static void process_parse_stat(struct process *process)
 
 		endl = read(ps, line, BUFFER_LEN - 1);
 		close(ps);
+		if(endl < 0)
+			return;
+		line[endl] = 0;
 
 		/* account for "kdeinit: " */
 		if ((char *) line == strstr(line, "kdeinit: ")) {
