@@ -24,9 +24,8 @@
 #ifndef CPPWRAP_HH
 #define CPPWRAP_HH
 
-#ifdef HAVE_O_CLOEXEC
 #include <fcntl.h>
-#else
+#ifndef HAVE_O_CLOEXEC
 enum { O_CLOEXEC = 02000000 };
 #endif
 
