@@ -1046,7 +1046,7 @@ mpd_Song *mpd_songDup(mpd_Song *song)
 		ret->artist = strndup(song->artist, *text_buffer_size);
 	}
 	if (song->albumartist) {
-		ret->artist = strndup(song->albumartist, text_buffer_size.get(*state));
+		ret->artist = strndup(song->albumartist, *text_buffer_size);
 	}
 	if (song->album) {
 		ret->album = strndup(song->album, *text_buffer_size);

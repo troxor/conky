@@ -52,7 +52,7 @@ namespace {
 		{}
 	};
 
-	const std::string mpd_host_setting::set_default(bool init);
+	const std::string mpd_host_setting::set_default(bool init)
 	{
 		if(init) {
 			// get the value from environment
@@ -152,10 +152,10 @@ namespace {
 		
 		do {
 			if (!conn)
-				conn = mpd_newConnection(*mpd_host.c_str(), *mpd_port, 10);
+				conn = mpd_newConnection(mpd_host->c_str(), *mpd_port, 10);
 
-			if (*mpd_password.size()) {
-				mpd_sendPasswordCommand(conn, *mpd_password.c_str());
+			if (mpd_password->size()) {
+				mpd_sendPasswordCommand(conn, mpd_password->c_str());
 				mpd_finishCommand(conn);
 			}
 
