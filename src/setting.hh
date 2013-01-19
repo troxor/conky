@@ -332,7 +332,7 @@ namespace conky {
 		{}
 
 		virtual const T set_default(bool init = false)
-		{ return set(default_value, init); }
+		{ return this->set(default_value, init); }
 
 	protected:
 		const T default_value;
@@ -370,7 +370,7 @@ namespace conky {
 			else {
 				auto r = do_convert(l, -1);
 				if(r.second)
-					set(r.first, init);
+					this->set(r.first, init);
 				else
 					set_default(init);
 			}
