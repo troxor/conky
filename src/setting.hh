@@ -209,6 +209,33 @@ namespace conky {
 		}
 	};
 
+	template<typename T, typename Traits = lua_traits<T>>
+	class range_traits: private Traits {
+		const T min;
+		const T max;
+
+	public:
+		range_traits(const T &min_, const T &max_) : min(min_), max(max_) { assert(min <= max); }
+
+		T from_lua(lua::state &l, int index, const std::string &description);
+		using Traits::to_lua;
+	};
+
+	template<typename T, typename Traits>
+	T range_traits<T, Traits>::from_lua(lua::state &l, int index, const std::string &description)
+	{
+		T t = Traits::from_lua(l, index, description);
+		if(t < min) {
+			NORM_ERR("Value too small for %s. Adjusting.", description.c_str());
+			t = min;
+		}
+		if(t > max) {
+			NORM_ERR("Value too large for %s. Adjusting.", description.c_str());
+			t = max;
+		}
+		return t;
+	}
+
 	namespace priv {
 		class config_setting_base {
 		private:
@@ -322,13 +349,13 @@ namespace conky {
 	 * when conky is running, but some (e.g. x/y position of the window) can.
 	 */
 	template<typename T, typename Traits = lua_traits<T>>
-	class simple_config_setting: public config_setting_template<T> {
+	class simple_config_setting: public config_setting_template<T>, private Traits {
 		typedef config_setting_template<T> Base;
 
 	public:
 		simple_config_setting(const std::string &name_, const T &default_value_ = T(),
-													bool modifiable_ = false)
-			: Base(name_), default_value(default_value_), modifiable(modifiable_)
+												bool modifiable_ = false, Traits traits = Traits())
+			: Base(name_), Traits(traits), default_value(default_value_), modifiable(modifiable_)
 		{}
 
 		virtual const T set_default(bool init = false)
@@ -378,35 +405,21 @@ namespace conky {
 	}
 
 	// Just like simple_config_setting, except that in only accepts value in the [min, max] range
-	template<typename T, typename Traits = lua_traits<T>>
-	class range_config_setting: public simple_config_setting<T, Traits> {
-		typedef simple_config_setting<T, Traits> Base;
+	// This class is here only for convenience and backward compatibility. It does not offer any
+	// additional functionality.
+	template<typename T, typename Traits_ = lua_traits<T>>
+	class range_config_setting: public simple_config_setting<T, range_traits<T, Traits_>> {
+		typedef simple_config_setting<T, range_traits<T, Traits_>> Base;
 
-		const T min;
-		const T max;
 	public:
 		range_config_setting(const std::string &name_,
-						const T &min_ = std::numeric_limits<T>::min(),
-						const T &max_ = std::numeric_limits<T>::max(),
+						const T &min = std::numeric_limits<T>::min(),
+						const T &max = std::numeric_limits<T>::max(),
 						const T &default_value_ = T(),
 						bool modifiable_ = false)
-			: Base(name_, default_value_, modifiable_), min(min_), max(max_)
-		{ assert(min <= Base::default_value && Base::default_value <= max); }
-
-		virtual const T set(const T &r, bool init)
-		{
-			if(!between(r, min, max)) {
-				NORM_ERR("Value is out of range for setting '%s'", Base::name.c_str());
-				// we ignore out-of-range values. an alternative would be to clamp them. do we
-				// want to do that?
-				return Base::value;
-			}
-			return Base::set(r, init);
-		}
+			: Base(name_, default_value_, modifiable_, range_traits<T, Traits_>(min, max))
+		{ assert(min <= Base::default_value); assert(Base::default_value <= max); }
 	};
-
-/////////// example settings, remove after real settings are available ///////
-	extern range_config_setting<int> asdf;
 }
 
 #endif /* SETTING_HH */

@@ -252,7 +252,4 @@ namespace conky {
 		for(size_t i = v.size(); i > 0; --i)
 			v[i-1]->cleanup();
 	}
-
-/////////// example settings, remove after real settings are available ///////
-	range_config_setting<int> asdf("asdf", 42, 47, 45, true);
 }

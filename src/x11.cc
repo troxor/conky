@@ -208,7 +208,8 @@ namespace conky {
 		class background_colour_setting: public simple_config_setting<
 											std::shared_ptr<x11_output::colour>, colour_traits> {
 
-			typedef simple_config_setting<std::shared_ptr<x11_output::colour>, colour_traits> Base;
+			typedef simple_config_setting<
+				std::shared_ptr<x11_output::colour>, conky::colour_traits> Base;
 
 			std::string default_name;
 			uint16_t default_alpha;
