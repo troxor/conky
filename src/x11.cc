@@ -118,6 +118,8 @@ namespace conky {
 
 		struct colour_traits {
 		private:
+			static range_traits<float> component_traits;
+
 			static uint16_t
 			read_component(lua::state &l, int index, int component, bool accept_nil,
 					const std::string &description)
@@ -127,7 +129,7 @@ namespace conky {
 					if(accept_nil && l.isnil(-1))
 						ret = 1.0;
 					else
-						ret = lua_traits<float>::from_lua(l, -1, description);
+						ret = component_traits.from_lua(l, -1, description);
 				} l.pop();
 
 				return std::lround(x11_output::ALPHA_OPAQUE * ret);
@@ -141,6 +143,7 @@ namespace conky {
 			to_lua(lua::state &l, const std::shared_ptr<x11_output::colour> &colour,
 					const std::string &);
 		};
+		range_traits<float> colour_traits::component_traits(0, 1);
 
 		std::shared_ptr<x11_output::colour>
 		colour_traits::from_lua(lua::state &l, int index, const std::string &description)
