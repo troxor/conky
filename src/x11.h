@@ -233,6 +233,7 @@ namespace conky {
 
 	public:
 		enum class buffer_type { SINGLE, PIXMAP, XDBE };
+		enum { ALPHA_TRANSPARENT = 0, ALPHA_OPAQUE = 0xffff };
 
 		x11_output(uint32_t period, const std::string &display_);
 		~x11_output();
@@ -244,8 +245,12 @@ namespace conky {
 		virtual void draw_text(const std::string &text, const point &p, const point &size);
 		virtual void draw_text(const std::u32string &text, const point &p, const point &size);
 
-		std::shared_ptr<colour> get_colour(const char *name, uint16_t alpha = 0xffff)
+		std::shared_ptr<colour> get_colour(const char *name, uint16_t alpha)
 		{ return colours->get_colour(name, alpha); }
+
+		std::shared_ptr<colour>
+		get_colour(uint16_t red, uint16_t green, uint16_t blue, uint16_t alpha)
+		{ return colours->get_colour(red, green, blue, alpha); }
 
 		XColor get_rgb(const std::shared_ptr<colour> &colour);
 

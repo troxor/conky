@@ -116,44 +116,111 @@ namespace conky {
 			{}
 		};
 
-		struct background_colour_traits {
-			static inline std::shared_ptr<x11_output::colour>
-			from_lua(lua::state &l, int index, const std::string &description)
+		struct colour_traits {
+		private:
+			static uint16_t
+			read_component(lua::state &l, int index, int component, bool accept_nil,
+					const std::string &description)
 			{
-				type_check(l, index, lua::TSTRING, lua::TNUMBER, description);
+				float ret;
+				l.rawgeti(index, component); {
+					if(accept_nil && l.isnil(-1))
+						ret = 1.0;
+					else
+						ret = lua_traits<float>::from_lua(l, -1, description);
+				} l.pop();
 
-				return out_to_x.get_om()->get_colour(l.tocstring(index),
-											lround(*own_window_argb_value * 255));
+				return std::lround(x11_output::ALPHA_OPAQUE * ret);
 			}
 
-			static inline void
+		public:
+			static std::shared_ptr<x11_output::colour>
+			from_lua(lua::state &l, int index, const std::string &description);
+
+			static void
 			to_lua(lua::state &l, const std::shared_ptr<x11_output::colour> &colour,
-					const std::string &)
-			{
-				const XColor &c = out_to_x.get_om()->get_rgb(colour);
-				l.pushstring(strprintf("rgb:%04x/%04x/%04x", c.red, c.green, c.blue));
-			}
+					const std::string &);
 		};
 
-		class background_colour_setting: public simple_config_setting<
-											std::shared_ptr<x11_output::colour>,
-											background_colour_traits> {
+		std::shared_ptr<x11_output::colour>
+		colour_traits::from_lua(lua::state &l, int index, const std::string &description)
+		{
+			type_check(l, index, lua::TSTRING, lua::TTABLE, description);
+			l.checkstack(1);
+			lua::stack_sentry s(l);
+			index = l.absindex(index);
+			std::shared_ptr<x11_output::colour> ret;
 
-			typedef simple_config_setting<std::shared_ptr<x11_output::colour>,
-											background_colour_traits> Base;
+			if(l.type(index) == lua::TTABLE) {
+				bool string;
+				l.rawgeti(index, 3); {
+					string = l.isnil(-1);
+				} l.pop();
+
+				if(string) {
+					std::string c;
+					l.rawgeti(index, 1); {
+						type_check(l, -1, lua::TSTRING, lua::TSTRING,
+								"rgb component of " + description);
+						c = l.tostring(-1);
+					} l.pop();
+
+					uint16_t a = read_component(l, index, 2, true,
+							"alpha component of " + description);
+
+					ret = out_to_x.get_om()->get_colour(c.c_str(), a);
+				} else {
+					uint16_t r = read_component(l, index, 1, false,
+							"red component of " + description);
+					uint16_t g = read_component(l, index, 2, false,
+							"green component of " + description);
+					uint16_t b = read_component(l, index, 3, false,
+							"blue component of " + description);
+					uint16_t a = read_component(l, index, 4, true,
+							"alpha component of " + description);
+
+					ret = out_to_x.get_om()->get_colour(r, g, b, a);
+				}
+			} else {
+				ret = out_to_x.get_om()->get_colour(l.tocstring(index), x11_output::ALPHA_OPAQUE);
+			}
+
+			return ret;
+		}
+
+		void
+		colour_traits::to_lua(lua::state &l, const std::shared_ptr<x11_output::colour> &colour,
+				const std::string &)
+		{
+			l.checkstack(2);
+			lua::stack_sentry s(l);
+
+			const XColor &c = out_to_x.get_om()->get_rgb(colour);
+			l.createtable(4); {
+				float div = x11_output::ALPHA_OPAQUE;
+				l.pushnumber(c.red / div); l.rawseti(-2, 1);
+				l.pushnumber(c.green / div); l.rawseti(-2, 2);
+				l.pushnumber(c.blue / div); l.rawseti(-2, 3);
+				l.pushnumber(colour->get_alpha() / div); l.rawseti(-2, 4);
+			} ++s;
+		}
+
+		class background_colour_setting: public simple_config_setting<
+											std::shared_ptr<x11_output::colour>, colour_traits> {
+
+			typedef simple_config_setting<std::shared_ptr<x11_output::colour>, colour_traits> Base;
 
 			std::string default_name;
+			uint16_t default_alpha;
 		public:
-			background_colour_setting(const std::string &name_, const std::string &default_name_)
+			background_colour_setting(const std::string &name_, const std::string &default_name_,
+					uint16_t default_alpha_)
 				: Base(name_, std::shared_ptr<x11_output::colour>(), true),
-				  default_name(default_name_)
+				  default_name(default_name_), default_alpha(default_alpha_)
 			{}
 
 			virtual const std::shared_ptr<x11_output::colour> set_default(bool)
-			{
-				return value = out_to_x.get_om()->get_colour(default_name.c_str(),
-													lround(*own_window_argb_value * 255));
-			}
+			{ return value = out_to_x.get_om()->get_colour(default_name.c_str(), default_alpha); }
 		};
 	} /* anonymous namespace */
 
@@ -285,8 +352,6 @@ namespace conky {
 
 	fancy_x11_setting<bool>			   use_argb_visual("own_window_argb_visual", false,
 																	&x11_output::set_visual);
-	range_config_setting<float>        own_window_argb_value("own_window_argb_value",
-																	0, 1, 1, false);
 
 	fancy_x11_setting<bool>			   own_window("own_window", true, &x11_output::setup_window);
 
@@ -297,7 +362,8 @@ namespace conky {
 	range_config_setting<char>		   stippled_borders("stippled_borders", 0,
 												std::numeric_limits<char>::max(), 0, true);
 
-	background_colour_setting          background_colour("own_window_colour", "black");
+	background_colour_setting          background_colour("own_window_colour", "black",
+															x11_output::ALPHA_OPAQUE);
 } /* namespace conky */
 
 
@@ -392,7 +458,7 @@ namespace conky {
 		: colour_factory(display_, colourmap_)
 	{
 		XColor w;
-		w.red = w.green = w.blue = 0xffff;
+		w.red = w.green = w.blue = ALPHA_OPAQUE;
 		if(XAllocColor(&display, colourmap, &w) == 0)
 			throw std::runtime_error("Unable to allocate any colours in the colourmap.");
 		white.reset(new alloc_colour(w, *this));
@@ -409,7 +475,7 @@ namespace conky {
 							"All unallocated colours will be replaced by white."),
 						colour.red, colour.green, colour.blue);
 			}
-			colour.red = colour.green = colour.blue = 0xffff;
+			colour.red = colour.green = colour.blue = ALPHA_OPAQUE;
 			colour.pixel = white->get_pixel();
 			return white;
 		}
@@ -506,7 +572,7 @@ namespace conky {
 	 * parents, else real transparency is used */
 	void x11_output::own_window_handler::set_background()
 	{
-		if(*use_argb_visual or *own_window_argb_value > 1e-3f)
+		if(*use_argb_visual or background_colour->get()->get_alpha() != ALPHA_TRANSPARENT)
 			XSetWindowBackground(&display, window, background_colour->get()->get_pixel());
 		else {
 			Window parent = window;
@@ -554,7 +620,7 @@ namespace conky {
 		e.window = desktop;
 		e.x = e.x_root;
 		e.y = e.y_root;
-		XSendEvent(&display, e.window, False, press?ButtonPressMask:ButtonReleaseMask, 
+		XSendEvent(&display, e.window, False, press?ButtonPressMask:ButtonReleaseMask,
 				reinterpret_cast<XEvent *>(&e));
 		if(press)
 			XSetInputFocus(&display, e.window, RevertToParent, e.time);
