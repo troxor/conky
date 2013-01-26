@@ -72,7 +72,8 @@ public:
 		: Base(), value_comp_(c)
 	{}
 
-	list_map(list_map &&r);
+	list_map(list_map &&r) : Base(std::move(r)), value_comp_(key_compare()) { }
+
 	explicit list_map(const std::initializer_list<value_type> &l);
 	template<typename InputIterator>
 	list_map(InputIterator f, const InputIterator &l, const key_compare &c = key_compare());
@@ -106,7 +107,9 @@ public:
 	const key_compare& key_comp() const { return value_comp_.comp; }
 	const value_compare& value_comp() const { return value_comp_; }
 
-	std::pair<iterator, bool> insert(const value_type &x)
+	template<typename Pair,
+		typename = typename std::enable_if<std::is_convertible<Pair, value_type>::value>::type>
+	std::pair<iterator, bool> insert(Pair &&x)
 	{
 		auto i = Base::before_begin();
 		auto j = Base::end();
@@ -114,7 +117,7 @@ public:
 			auto t = i++;
 
 			if(i == j or value_comp_(x, *i)) // at end or less than the current element
-				return { Base::insert_after(t, x), true };
+				return { Base::insert_after(t, std::forward<Pair>(x)), true };
 			else if(not value_comp_(*i, x)) // equal to the current element
 				return { i, false };
 			// else, strictly greater than current element, continue
@@ -151,8 +154,7 @@ public:
 	std::pair<iterator, iterator> equal_range(const key_type &k);
 	std::pair<const_iterator, const_iterator> equal_range(const key_type &k) const;
 
-	iterator begin();
-	const_iterator begin() const;
+	using Base::begin;
 	using Base::end;
 	size_type size() const;
 	size_type max_size() const;
