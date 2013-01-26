@@ -139,6 +139,7 @@ namespace conky {
 
 		using Base::operator->;
 		using Base::operator*;
+		using Base::get;
 		using Base::reset;
 	};
 		
