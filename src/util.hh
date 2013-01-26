@@ -34,6 +34,12 @@ namespace conky {
 		non_copyable() { }
 	};
 
+	template<typename Mutex, typename Fn>
+	auto synchronized(Mutex &mutex, const Fn &fn) -> decltype(fn())
+	{
+		std::lock_guard<Mutex> lock(mutex);
+		return std::move(fn());
+	}
 } /* namespace conky */
 
 #endif /* UTIL_HH */
