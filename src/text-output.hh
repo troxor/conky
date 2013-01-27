@@ -42,6 +42,11 @@ namespace conky {
 	public:
 		text_output(uint32_t period);
 
+		virtual std::unique_ptr<const scope> parse_scope(lua::state &) { return {}; }
+		virtual std::unique_ptr<const scope> enter_scope(const std::unique_ptr<const scope> &)
+		{ return {}; }
+		virtual void leave_scope(std::unique_ptr<const scope> &&) { }
+
 		virtual point get_max_extents() const { return {1, 1}; }
 
 		virtual point get_text_size(const std::u32string &text) const

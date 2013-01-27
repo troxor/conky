@@ -44,7 +44,7 @@ namespace conky {
 	 */
     class data_source_base: public layout_item {
     public:
-		virtual point size(const output_method &om)
+		virtual point size(output_method &om)
 		{ return om.get_text_size(get_text()); }
 
 		virtual void draw(output_method &om, const point &p, const point &dim)

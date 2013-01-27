@@ -1068,9 +1068,14 @@ namespace conky {
 	};
 #endif /* BUILD_XFT */
 
+	class x11_output::x11_scope: public scope {
+	public:
+		std::shared_ptr<colour> foreground;
+	};
+
 	x11_output::x11_output(uint32_t period, const std::string &display_)
 		: output_method(period, true), display(NULL), screen(0), root(0),
-		  desktop(0), visual(NULL), depth(0), colourmap(0)
+		  desktop(0), visual(NULL), depth(0), colourmap(0), active_scope(new x11_scope)
 
 	{
 		// passing NULL to XOpenDisplay should open the default display
@@ -1093,7 +1098,7 @@ namespace conky {
 
 	x11_output::~x11_output()
 	{
-		fg_colour.reset();
+		active_scope.reset();
 		colours.reset();
 		current_font.reset();
 		fonts.reset();
@@ -1443,8 +1448,7 @@ namespace conky {
 	{
 		drawable = buffer::create(type, *display, *window, depth);
 		colours = colour_factory::create(*display, *visual, colourmap);
-		fg_colour = colours->get_colour("white");
-		drawable->set_foreground(fg_colour);
+		drawable->set_foreground(active_scope->foreground = colours->get_colour("white"));
 		return drawable->get_type();
 	}
 
@@ -1594,6 +1598,45 @@ namespace conky {
 
 	void x11_output::draw_text(const std::string &text, const point &p, const point &size)
 	{ current_font->draw_text(text, p, size); }
+
+	std::unique_ptr<const output_method::scope> x11_output::parse_scope(lua::state &l)
+	{
+		lua::stack_sentry s(l, -1);
+
+		x11_scope *xret;
+		std::unique_ptr<const scope> ret(xret = new x11_scope);
+
+		l.rawgetfield(-1, "colour"); if(!l.isnil(-1)) {
+			try {
+				xret->foreground = colour_traits::from_lua(l, -1, "foreground colour of scope");
+			}
+			catch(conversion_error &e) {
+				NORM_ERR("%s", e.what());
+			}
+		} l.pop();
+
+		return ret;
+	}
+
+	std::unique_ptr<const output_method::scope>
+	x11_output::enter_scope(const std::unique_ptr<const scope> &s)
+	{
+		const x11_scope &xs = dynamic_cast<const x11_scope &>(*s);
+		x11_scope *xret;
+		std::unique_ptr<const scope> ret(xret = new x11_scope);
+		if(xs.foreground) {
+			xret->foreground = active_scope->foreground;
+			drawable->set_foreground(active_scope->foreground = xs.foreground);
+		}
+		return ret;
+	}
+
+	void x11_output::leave_scope(std::unique_ptr<const scope> &&s)
+	{
+		const x11_scope &xs = dynamic_cast<const x11_scope &>(*s);
+		if(xs.foreground) drawable->set_foreground(active_scope->foreground = xs.foreground);
+		s.reset();
+	}
 }
 
 //Get current desktop number

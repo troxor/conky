@@ -201,6 +201,8 @@ namespace conky {
 		class xlib_font_factory;
 		class xft_font_factory;
 
+		class x11_scope;
+
 		unicode_converter conv;
 
 		Display *display;
@@ -218,7 +220,8 @@ namespace conky {
 		std::shared_ptr<font> current_font;
 
 		std::unique_ptr<colour_factory> colours;
-		std::shared_ptr<colour> fg_colour;
+
+		std::unique_ptr<x11_scope> active_scope;
 
 		Window find_subwindow(Window win);
 		void find_root_and_desktop_window();
@@ -238,8 +241,11 @@ namespace conky {
 		x11_output(uint32_t period, const std::string &display_);
 		~x11_output();
 
-		virtual point get_max_extents() const;
+		virtual std::unique_ptr<const scope> parse_scope(lua::state &l);
+		virtual std::unique_ptr<const scope> enter_scope(const std::unique_ptr<const scope> &s);
+		virtual void leave_scope(std::unique_ptr<const scope> &&s);
 
+		virtual point get_max_extents() const;
 		virtual point get_text_size(const std::string &text) const;
 		virtual point get_text_size(const std::u32string &text) const;
 		virtual void draw_text(const std::string &text, const point &p, const point &size);

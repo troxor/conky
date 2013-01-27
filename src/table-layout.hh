@@ -50,26 +50,42 @@ namespace conky {
 		typedef std::vector<std::shared_ptr<layout_item>> ItemRow;
 		typedef std::vector<item_data> DataRow;
 		typedef std::vector<DataRow> DataGrid;
-		typedef list_map<const output_method *, DataGrid> DataMap;
 
+		struct data {
+			std::unique_ptr<const output_method::scope> scope;
+			DataGrid grid;
+
+			data() { }
+
+			data(std::unique_ptr<const output_method::scope> &&scope_, size_t cols, size_t rows)
+				: scope(std::move(scope_)), grid(cols, DataRow(rows))
+			{}
+		};
+
+		typedef list_map<const output_method *, data> DataMap;
+
+		lua::state &l;
 		std::vector<column> columns;
 		std::vector<ItemRow> item_grid;
 		DataMap data_map;
 		std::mutex data_mutex;
+		int scope_ref;
 
 		static column default_column;
 
-		size_t read_columns(lua::state &l);
+		size_t read_columns();
 		static column read_column(lua::state &l, size_t colno);
 		static point::type align(point::type have, point::type need, alignment a);
-
 		ItemRow read_row(lua::state &l, size_t rowno, size_t cols);
 		std::shared_ptr<layout_item> read_cell(lua::state &l, size_t rowno, size_t colno);
+		DataMap::iterator make_data(output_method &om);
+
+		bool empty() const { return item_grid.empty() || item_grid[0].empty(); }
 
 	public:
-		table_layout(lua::state &l);
+		table_layout(lua::state &l_);
 
-		virtual point size(const output_method &om);
+		virtual point size(output_method &om);
 
 		virtual void draw(output_method &om, const point &p, const point &size);
 	};

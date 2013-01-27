@@ -29,7 +29,10 @@
 #include <string>
 #include <vector>
 
+#include "list_map.hh"
+#include "luamm.hh"
 #include "thread.hh"
+#include "util.hh"
 
 namespace conky {
 
@@ -80,6 +83,15 @@ namespace conky {
 		output_method(uint32_t period, bool use_pipe)
 			: thread_base(reinterpret_cast<size_t>(this), period, false, use_pipe)
 		{}
+
+		class scope: private non_copyable {
+		public:
+			virtual ~scope() { }
+		};
+
+		virtual std::unique_ptr<const scope> parse_scope(lua::state &l) = 0;
+		virtual std::unique_ptr<const scope> enter_scope(const std::unique_ptr<const scope> &s) = 0;
+		virtual void leave_scope(std::unique_ptr<const scope> &&s) = 0;
 
 		virtual point get_max_extents() const = 0;
 		virtual point get_text_size(const std::u32string &text) const = 0;

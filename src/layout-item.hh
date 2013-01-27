@@ -42,7 +42,7 @@ namespace conky {
 		virtual ~layout_item() {}
 
 		/// Calculates the space this item will occupy when drawn to om.
-		virtual point size(const output_method &om) = 0;
+		virtual point size(output_method &om) = 0;
 
 		/**
 		 * Draws this item to om, p contains the coordinates of the top-left corner, p+size is
