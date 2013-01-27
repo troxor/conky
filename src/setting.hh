@@ -240,8 +240,8 @@ namespace conky {
 		class config_setting_base {
 		private:
 			static void process_setting(lua::state &l, bool init);
-			static int config__index(lua::state *l);
-			static int config__newindex(lua::state *l);
+			static int config__index(lua::state &l);
+			static int config__newindex(lua::state &l);
 			static void make_conky_config(lua::state &l);
 
 			// copying is a REALLY bad idea

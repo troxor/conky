@@ -87,7 +87,7 @@ namespace lua {
 			try {
 				cpp_function *fn = static_cast<cpp_function *>( L->touserdata(lua_upvalueindex(1)) );
 				assert(fn);
-				return (*fn)(L);
+				return (*fn)(*L);
 			}
 			catch(lua::exception &e) {
 				// rethrow lua errors as such

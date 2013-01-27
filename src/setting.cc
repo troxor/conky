@@ -142,11 +142,11 @@ namespace conky {
 		 * stack on entry: | config_table, key, value |
 		 * stack on exit:  | |
 		 */
-		int config_setting_base::config__newindex(lua::state *l)
+		int config_setting_base::config__newindex(lua::state &l)
 		{
-			lua::stack_sentry s(*l, -3);
+			lua::stack_sentry s(l, -3);
 
-			process_setting(*l, false);
+			process_setting(l, false);
 
 			return 0;
 		}
@@ -156,17 +156,17 @@ namespace conky {
 		 * stack on entry: | config_table, key |
 		 * stack on exit:  | value |
 		 */
-		int config_setting_base::config__index(lua::state *l)
+		int config_setting_base::config__index(lua::state &l)
 		{
-			lua::stack_sentry s(*l, -2);
+			lua::stack_sentry s(l, -2);
 
-			config_setting_base *ptr = get_setting(*l, -1);
-			l->pop(2);
+			config_setting_base *ptr = get_setting(l, -1);
+			l.pop(2);
 			if(not ptr) {
-				l->pushnil();
+				l.pushnil();
 				NORM_ERR("Attempting to access nonexisting setting.");
-			}
-			ptr->lua_getter(*l);
+			} else
+				ptr->lua_getter(l);
 			return 1;
 		}
 

@@ -55,7 +55,7 @@ namespace conky {
         virtual std::string get_text() const;
     };
 
-	typedef std::function<std::shared_ptr<data_source_base> (lua::state *)> data_source_factory;
+	typedef std::function<std::shared_ptr<data_source_base> (lua::state &)> data_source_factory;
 
 	/// A simple data source returning some fixed string.
 	class string_source: public data_source_base {
@@ -81,14 +81,14 @@ namespace conky {
 	class simple_numeric_source: public data_source_base {
 		static_assert(std::is_convertible<T, double>::value, "T must be convertible to double");
 
-		const T *source;
+		const T &source;
 	public:
-		simple_numeric_source(lua::state *l, const T *source_)
+		simple_numeric_source(lua::state &l, const T &source_)
 			: source(source_)
-		{ l->pop(); }
+		{ l.pop(); }
 
 		virtual double get_number() const
-		{ return *source; }
+		{ return source; }
 	};
 
 	/*
@@ -133,7 +133,7 @@ namespace conky {
 	class register_disabled_data_source: public register_data_source {
 		static
 		std::shared_ptr<data_source_base>
-		factory(lua::state *l, const std::string &name, const std::string &setting);
+		factory(lua::state &l, const std::string &name, const std::string &setting);
 
 	public:
 		register_disabled_data_source(const std::string &name, const std::string &setting)

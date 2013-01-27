@@ -34,15 +34,15 @@ namespace conky {
 		const char layout_item_metatable[] = "conky::layout_item_metatable";
 
 		template<typename T>
-		int layout_factory(lua::state *l)
+		int layout_factory(lua::state &l)
 		{
 			static_assert(std::is_base_of<layout_item, T>::value,
 							"T must be derived from conky::layout_item");
 
-			l->createuserdata<std::shared_ptr<layout_item>>( std::make_shared<T>(*l) );
+			l.createuserdata<std::shared_ptr<layout_item>>( std::make_shared<T>(l) );
 
-			l->rawgetfield(lua::REGISTRYINDEX, layout_item_metatable);
-			l->setmetatable(-2);
+			l.rawgetfield(lua::REGISTRYINDEX, layout_item_metatable);
+			l.setmetatable(-2);
 
 			return 1;
 		}

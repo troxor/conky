@@ -35,7 +35,7 @@ namespace lua {
 
 	typedef lua_Integer integer;
 	typedef lua_Number number;
-	typedef std::function<int(state *)> cpp_function;
+	typedef std::function<int(state &)> cpp_function;
 
 	enum {
 		ENVIRONINDEX = LUA_ENVIRONINDEX,

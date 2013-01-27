@@ -48,19 +48,19 @@ namespace conky {
 		 */
 		data_sources_t *data_sources;
 
-		int data_source_asnumber(lua::state *l)
+		int data_source_asnumber(lua::state &l)
 		{
-			l->checkargno(1);
-			double x = get_data_source(*l, -1)->get_number();
-			l->pushnumber(x);
+			l.checkargno(1);
+			double x = get_data_source(l, -1)->get_number();
+			l.pushnumber(x);
 			return 1;
 		}
 
-		int data_source_astext(lua::state *l)
+		int data_source_astext(lua::state &l)
 		{
-			l->checkargno(1);
-			std::string x = get_data_source(*l, -1)->get_text();
-			l->pushstring(x);
+			l.checkargno(1);
+			std::string x = get_data_source(l, -1)->get_text();
+			l.pushstring(x);
 			return 1;
 		}
 
@@ -75,12 +75,12 @@ namespace conky {
 			"  return 0/0;\n"
 			"end\n";
 
-		int factory_wrapper(lua::state *l, const data_source_factory &factory)
+		int factory_wrapper(lua::state &l, const data_source_factory &factory)
 		{
-			l->createuserdata<std::shared_ptr<data_source_base>>(factory(l));
+			l.createuserdata<std::shared_ptr<data_source_base>>(factory(l));
 
-			l->rawgetfield(lua::REGISTRYINDEX, priv::data_source_metatable);
-			l->setmetatable(-2);
+			l.rawgetfield(lua::REGISTRYINDEX, priv::data_source_metatable);
+			l.setmetatable(-2);
 			return 1;
 		}
 	}
@@ -102,13 +102,13 @@ namespace conky {
 	}
 
 	std::shared_ptr<data_source_base>
-	register_disabled_data_source::factory(lua::state *l, const std::string &name, const std::string &setting)
+	register_disabled_data_source::factory(lua::state &l, const std::string &name, const std::string &setting)
 	{
 		// XXX some generic way of reporting errors? NORM_ERR?
 		std::cerr << "Support for variable '" << name
 			<< "' has been disabled during compilation. Please recompile with '"
 			<< setting << "'" << std::endl;
-		return std::make_shared<simple_numeric_source<float>>(l, &NaN);
+		return std::make_shared<simple_numeric_source<float>>(l, std::cref(NaN));
 	}
 
 	double data_source_base::get_number() const
