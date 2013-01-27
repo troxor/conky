@@ -1075,8 +1075,6 @@ struct text_object *construct_text_object(char * /*s*/, const char * /*arg*/,
 		obj->sub = (text_object*)malloc(sizeof(struct text_object));
 		extract_variable_text_internal(obj->sub, arg);
 		obj->callbacks.print = &print_format_time;
-	END OBJ(nodename, 0)
-		obj->callbacks.print = &print_nodename;
 	END OBJ(nodename_short, 0)
 		obj->callbacks.print = &print_nodename_short;
 	END OBJ_ARG(cmdline_to_pid, 0, "cmdline_to_pid needs a command line as argument")

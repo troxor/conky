@@ -62,6 +62,7 @@
 #include "openbsd.h"
 #endif
 
+#include "data-source.hh"
 #include "update-cb.hh"
 
 #ifdef BUILD_CURL
@@ -472,12 +473,6 @@ void print_machine(struct text_object *obj, char *p, int p_max_size)
 	snprintf(p, p_max_size, "%s", info.uname_s.machine);
 }
 
-void print_nodename(struct text_object *obj, char *p, int p_max_size)
-{
-	(void)obj;
-	snprintf(p, p_max_size, "%s", info.uname_s.nodename);
-}
-
 void print_nodename_short(struct text_object *obj, char *p, int p_max_size)
 {
 	(void)obj;
@@ -760,4 +755,14 @@ int updatenr_iftest(struct text_object *obj)
 	if (get_total_updates() % get_updatereset() != obj->data.i - 1)
 		return 0;
 	return 1;
+}
+
+namespace conky {
+	namespace {
+		register_data_source nodename("nodename",
+				[](lua::state &l) -> std::shared_ptr<string_source> {
+					l.pop();
+					return std::make_shared<string_source>(info.uname_s.nodename);
+				});
+	}
 }
