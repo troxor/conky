@@ -217,10 +217,7 @@ namespace conky {
 		std::unique_ptr<buffer> drawable;
 
 		std::unique_ptr<font_factory> fonts;
-		std::shared_ptr<font> current_font;
-
 		std::unique_ptr<colour_factory> colours;
-
 		std::unique_ptr<x11_scope> active_scope;
 
 		Window find_subwindow(Window win);

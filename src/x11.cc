@@ -1071,6 +1071,7 @@ namespace conky {
 	class x11_output::x11_scope: public scope {
 	public:
 		std::shared_ptr<colour> foreground;
+		std::shared_ptr<x11_output::font> font;
 	};
 
 	x11_output::x11_output(uint32_t period, const std::string &display_)
@@ -1100,7 +1101,6 @@ namespace conky {
 	{
 		active_scope.reset();
 		colours.reset();
-		current_font.reset();
 		fonts.reset();
 		drawable.reset();
 		window.reset();
@@ -1468,7 +1468,7 @@ namespace conky {
 			xft = false;
 		}
 
-		current_font = fonts->get_default_font();
+		active_scope->font = fonts->get_default_font();
 
 		XFlush(display);
 		return xft;
@@ -1585,19 +1585,19 @@ namespace conky {
 	}
 
 	point x11_output::get_max_extents() const
-	{ return current_font->get_max_extents(); }
+	{ return active_scope->font->get_max_extents(); }
 
 	point x11_output::get_text_size(const std::u32string &text) const
 	{ return get_text_size(conv.to_utf8(text)); }
 
 	point x11_output::get_text_size(const std::string &text) const
-	{ return current_font->get_text_size(text); }
+	{ return active_scope->font->get_text_size(text); }
 
 	void x11_output::draw_text(const std::u32string &text, const point &p, const point &size)
 	{ draw_text(conv.to_utf8(text), p, size); }
 
 	void x11_output::draw_text(const std::string &text, const point &p, const point &size)
-	{ current_font->draw_text(text, p, size); }
+	{ active_scope->font->draw_text(text, p, size); }
 
 	std::unique_ptr<const output_method::scope> x11_output::parse_scope(lua::state &l)
 	{
@@ -1609,6 +1609,16 @@ namespace conky {
 		l.rawgetfield(-1, "colour"); if(!l.isnil(-1)) {
 			try {
 				xret->foreground = colour_traits::from_lua(l, -1, "foreground colour of scope");
+			}
+			catch(conversion_error &e) {
+				NORM_ERR("%s", e.what());
+			}
+		} l.pop();
+
+		l.rawgetfield(-1, "font"); if(!l.isnil(-1)) {
+			try {
+				type_check(l, -1, lua::TSTRING, lua::TSTRING, "font of scope");
+				xret->font = fonts->get_font(l.tocstring(-1));
 			}
 			catch(conversion_error &e) {
 				NORM_ERR("%s", e.what());
@@ -1628,13 +1638,20 @@ namespace conky {
 			xret->foreground = active_scope->foreground;
 			drawable->set_foreground(active_scope->foreground = xs.foreground);
 		}
+		if(xs.font) {
+			xret->font = active_scope->font;
+			active_scope->font = xs.font;
+		}
 		return ret;
 	}
 
 	void x11_output::leave_scope(std::unique_ptr<const scope> &&s)
 	{
 		const x11_scope &xs = dynamic_cast<const x11_scope &>(*s);
-		if(xs.foreground) drawable->set_foreground(active_scope->foreground = xs.foreground);
+		if(xs.foreground)
+			drawable->set_foreground(active_scope->foreground = xs.foreground);
+		if(xs.font)
+			active_scope->font = xs.font;
 		s.reset();
 	}
 }

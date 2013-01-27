@@ -2350,6 +2350,9 @@ int main(int argc, char **argv)
 		first_pass = 0; /* don't ever call fork() again */
 
 		main_loop();
+
+		global_text.reset();
+		state.reset();
 	}
 	catch(fork_throw &e) { return EXIT_SUCCESS; }
 	catch(unknown_arg_throw &e) { return EXIT_FAILURE; }
