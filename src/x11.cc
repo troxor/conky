@@ -1036,7 +1036,7 @@ namespace conky {
 				xftc.color.blue = xc.blue;
 				xftc.color.alpha = c->get_alpha();
 
-				XftDrawStringUtf8(factory.draw, &xftc, xf, pos.x, pos.y,
+				XftDrawStringUtf8(factory.draw, &xftc, xf, pos.x, pos.y+xf->ascent,
 						reinterpret_cast<const FcChar8 *>(text.c_str()), text.length());
 			}
 		};
