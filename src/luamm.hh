@@ -171,7 +171,7 @@ namespace lua {
 	std::string quote(const std::string &str);
 
 	// a fancy wrapper around lua_State
-	class state: private std::mutex {
+	class state: private std::recursive_mutex {
 		lua_State *cobj;
 
 		// destructor for C++ objects stored as lua userdata
@@ -331,9 +331,9 @@ namespace lua {
 		template<typename T, typename... Args>
 		T* createuserdata(Args&&... args);
 
-		using std::mutex::lock;
-		using std::mutex::unlock;
-		using std::mutex::try_lock;
+		using std::recursive_mutex::lock;
+		using std::recursive_mutex::unlock;
+		using std::recursive_mutex::try_lock;
 	};
 
 	/*
