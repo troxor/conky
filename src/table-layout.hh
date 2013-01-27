@@ -84,6 +84,7 @@ namespace conky {
 
 	public:
 		table_layout(lua::state &l_);
+		virtual ~table_layout() { l.unref(lua::REGISTRYINDEX, scope_ref); }
 
 		virtual point size(output_method &om);
 

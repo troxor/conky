@@ -157,9 +157,6 @@ namespace conky {
 			for(auto i = item_grid.begin(); i != item_grid.end(); ++i)
 				i->resize(cols, {});
 		}
-
-		if(empty())
-			return;
 	}
 
 	point::type table_layout::align(point::type have, point::type need, alignment a)
