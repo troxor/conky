@@ -131,7 +131,7 @@ namespace conky {
 			l.pushboolean(false);
 			l.rawsetfield(-2, "__metatable");
 
-			l.pushdestructor<data_source_base>();
+			l.pushdestructor<std::shared_ptr<data_source_base>>();
 			l.rawsetfield(-2, "__gc");
 
 			l.loadstring(data_source__index);
