@@ -160,7 +160,6 @@ void print_battery_short(struct text_object *, char *, int);
 void print_blink(struct text_object *, char *, int);
 void print_include(struct text_object *, char *, int);
 
-void print_updates(struct text_object *, char *, int);
 int updatenr_iftest(struct text_object *);
 
 #ifdef BUILD_CURL

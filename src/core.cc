@@ -1300,8 +1300,6 @@ struct text_object *construct_text_object(char * /*s*/, const char * /*arg*/,
 	END OBJ(totalup, &update_net_stats)
 		parse_net_stat_arg(obj, arg, free_at_crash);
 		obj->callbacks.print = &print_totalup;
-	END OBJ(updates, 0)
-		obj->callbacks.print = &print_updates;
 	END OBJ_IF(if_updatenr, 0)
 		obj->data.i = arg ? atoi(arg) : 0;
 		if(obj->data.i == 0) CRIT_ERR(obj, free_at_crash, "if_updatenr needs a number above 0 as argument");

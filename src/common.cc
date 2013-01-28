@@ -743,17 +743,10 @@ void print_to_bytes(struct text_object *obj, char *p, int p_max_size)
 	snprintf(p, p_max_size, "%s", &(buf[0]));
 }
 
-
-void print_updates(struct text_object *obj, char *p, int p_max_size)
+int updatenr_iftest(struct text_object *)
 {
-	(void)obj;
-	snprintf(p, p_max_size, "%d", get_total_updates());
-}
-
-int updatenr_iftest(struct text_object *obj)
-{
-	if (get_total_updates() % get_updatereset() != obj->data.i - 1)
-		return 0;
+/*	if (get_total_updates() % get_updatereset() != obj->data.i - 1)
+		return 0;*/
 	return 1;
 }
 

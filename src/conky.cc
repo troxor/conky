@@ -95,6 +95,7 @@
 #include "weather.h"
 #endif /* BUILD_WEATHER_METAR */
 
+#include "data-source.hh"
 #include "lua-config.hh"
 #include "setting.hh"
 #include "output-method.hh"
@@ -478,7 +479,16 @@ const std::shared_ptr<conky::layout_item>& get_global_text()
 
 long global_text_lines;
 
-static int total_updates;
+namespace conky {
+	namespace {
+		uint32_t total_updates;
+
+		register_data_source updates("updates",
+				&std::make_shared<simple_numeric_source<uint32_t>, lua::state &, const uint32_t &>,
+				std::cref(total_updates));
+	}
+}
+
 static int updatereset;
 
 std::unique_ptr<lua::state> state;
@@ -491,11 +501,6 @@ void set_updatereset(int i)
 int get_updatereset(void)
 {
 	return updatereset;
-}
-
-int get_total_updates(void)
-{
-	return total_updates;
 }
 
 /* quite boring functions */
@@ -799,7 +804,6 @@ static void generate_text(void)
 		next_update_time = get_time() + ui;
 	}
 	last_update_time = current_update_time;
-	total_updates++;
 }
 #endif
 
@@ -2251,6 +2255,7 @@ static void main_loop()
 
 		// time to collect new data
 		// XXX conky::run_all_callbacks();
+		++conky::total_updates;
 		conky::output_methods.run_all_threads();
 		last_update = std::chrono::high_resolution_clock::now();
 	}
