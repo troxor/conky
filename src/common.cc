@@ -461,30 +461,6 @@ double swap_barval(struct text_object *obj)
 	return info.swapmax ? ((double)info.swap / info.swapmax) : 0;
 }
 
-void print_kernel(struct text_object *obj, char *p, int p_max_size)
-{
-	(void)obj;
-	snprintf(p, p_max_size, "%s", info.uname_s.release);
-}
-
-void print_machine(struct text_object *obj, char *p, int p_max_size)
-{
-	(void)obj;
-	snprintf(p, p_max_size, "%s", info.uname_s.machine);
-}
-
-void print_nodename_short(struct text_object *obj, char *p, int p_max_size)
-{
-	(void)obj;
-	snprintf(p, p_max_size, "%s", info.uname_s.nodename);
-	for(int i=0; p[i] != 0; i++) {
-		if(p[i] == '.') {
-			p[i] = 0;
-			break;
-		}
-	}
-}
-
 #if defined(__DragonFly__)
 void print_version(struct text_object *obj, char *p, int p_max_size)
 {
@@ -750,5 +726,14 @@ namespace conky {
 				&data_source_base::make<string_source, const std::string &>, info.uname_s.nodename);
 		register_data_source sysname("sysname",
 				&data_source_base::make<string_source, const std::string &>, info.uname_s.sysname);
+		register_data_source kernel("kernel",
+				&data_source_base::make<string_source, const std::string &>, info.uname_s.release);
+		register_data_source machine("machine",
+				&data_source_base::make<string_source, const std::string &>, info.uname_s.machine);
+		register_data_source nodename_short("nodename_short",
+			[](lua::state &l) -> std::shared_ptr<string_source> {
+				std::string name = info.uname_s.nodename;
+				return data_source_base::make<string_source>(l, name.substr(0, name.find('.')));
+			});
 	}
 }

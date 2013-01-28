@@ -113,10 +113,6 @@ double mem_with_buffers_barval(struct text_object *);
 uint8_t swap_percentage(struct text_object *);
 double swap_barval(struct text_object *);
 
-void print_kernel(struct text_object *, char *, int);
-void print_machine(struct text_object *, char *, int);
-void print_nodename_short(struct text_object *, char *, int);
-
 #if defined(__DragonFly__)
 void print_version(struct text_object *obj, char *p, int p_max_size);
 #endif
