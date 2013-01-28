@@ -643,18 +643,6 @@ void human_readable(long long num, char *buf, int size)
 /* global object list root element */
 static struct text_object global_root_object;
 
-static long current_text_color;
-
-void set_current_text_color(long colour)
-{
-	current_text_color = colour;
-}
-
-long get_current_text_color(void)
-{
-	return current_text_color;
-}
-
 void parse_conky_vars(struct text_object *root, const char *txt,
 		char *p, int p_max_size)
 {

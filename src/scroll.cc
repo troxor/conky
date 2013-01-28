@@ -56,7 +56,6 @@ void parse_scroll_arg(struct text_object *obj, const char *arg, void *free_at_cr
 	sd = (struct scroll_data *)malloc(sizeof(struct scroll_data));
 	memset(sd, 0, sizeof(struct scroll_data));
 
-	sd->resetcolor = get_current_text_color();
 	sd->step = 1;
 	sd->direction = SCROLL_LEFT;
 

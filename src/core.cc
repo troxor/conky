@@ -618,12 +618,6 @@ struct text_object *construct_text_object(char * /*s*/, const char * /*arg*/,
 		obj->callbacks.graphval = &diskiographval_write;
 #endif /* BUILD_X11 */
 	END OBJ(color, 0)
-#ifdef BUILD_X11
-		if (*out_to_x) {
-			obj->data.l = arg ? get_x11_color(arg) : *default_color;
-			set_current_text_color(obj->data.l);
-		}
-#endif /* BUILD_X11 */
 #ifdef BUILD_NCURSES
 		if (*out_to_ncurses) {
 			obj->data.l = COLOR_WHITE;
@@ -649,52 +643,6 @@ struct text_object *construct_text_object(char * /*s*/, const char * /*arg*/,
 		}
 #endif /* BUILD_NCURSES */
 		obj->callbacks.print = &new_fg;
-#ifdef BUILD_X11
-	END OBJ(color0, 0)
-		obj->data.l = *color[0];
-		set_current_text_color(obj->data.l);
-		obj->callbacks.print = &new_fg;
-	END OBJ(color1, 0)
-		obj->data.l = *color[1];
-		set_current_text_color(obj->data.l);
-		obj->callbacks.print = &new_fg;
-	END OBJ(color2, 0)
-		obj->data.l = *color[2];
-		set_current_text_color(obj->data.l);
-		obj->callbacks.print = &new_fg;
-	END OBJ(color3, 0)
-		obj->data.l = *color[3];
-		set_current_text_color(obj->data.l);
-		obj->callbacks.print = &new_fg;
-	END OBJ(color4, 0)
-		obj->data.l = *color[4];
-		set_current_text_color(obj->data.l);
-		obj->callbacks.print = &new_fg;
-	END OBJ(color5, 0)
-		obj->data.l = *color[5];
-		set_current_text_color(obj->data.l);
-		obj->callbacks.print = &new_fg;
-	END OBJ(color6, 0)
-		obj->data.l = *color[6];
-		set_current_text_color(obj->data.l);
-		obj->callbacks.print = &new_fg;
-	END OBJ(color7, 0)
-		obj->data.l = *color[7];
-		set_current_text_color(obj->data.l);
-		obj->callbacks.print = &new_fg;
-	END OBJ(color8, 0)
-		obj->data.l = *color[8];
-		set_current_text_color(obj->data.l);
-		obj->callbacks.print = &new_fg;
-	END OBJ(color9, 0)
-		obj->data.l = *color[9];
-		set_current_text_color(obj->data.l);
-		obj->callbacks.print = &new_fg;
-	END OBJ(font, 0)
-		scan_font(obj, arg);
-		obj->callbacks.print = &new_font;
-		obj->callbacks.free = &gen_free_opaque;
-#endif /* BUILD_X11 */
 	END OBJ(conky_version, 0)
 		obj_be_plain_text(obj, VERSION);
 	END OBJ(conky_build_date, 0)

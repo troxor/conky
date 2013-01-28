@@ -270,9 +270,6 @@ extern conky::range_config_setting<double> update_interval;
 extern conky::range_config_setting<double> update_interval_on_battery;
 double active_update_interval();
 
-void set_current_text_color(long colour);
-long get_current_text_color(void);
-
 void set_updatereset(int);
 int get_updatereset(void);
 int get_total_updates(void);
