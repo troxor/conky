@@ -53,6 +53,10 @@ namespace conky {
 
         virtual double get_number() const;
         virtual std::string get_text() const;
+
+		template<typename T, typename... Args>
+		static std::shared_ptr<T> make(lua::state &l, Args &&... args)
+		{ return std::shared_ptr<T>(new T(l, std::forward<Args>(args)...)); }
     };
 
 	typedef std::function<std::shared_ptr<data_source_base> (lua::state &)> data_source_factory;
@@ -60,9 +64,9 @@ namespace conky {
 	/// A simple data source returning some fixed string.
 	class string_source: public data_source_base {
 	public:
-		explicit string_source(const std::string &text_)
+		explicit string_source(lua::state &l, const std::string &text_)
 			: text(text_)
-		{}
+		{ l.pop(); }
 
         virtual std::string get_text() const { return text; }
 

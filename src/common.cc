@@ -753,9 +753,6 @@ int updatenr_iftest(struct text_object *)
 namespace conky {
 	namespace {
 		register_data_source nodename("nodename",
-				[](lua::state &l) -> std::shared_ptr<string_source> {
-					l.pop();
-					return std::make_shared<string_source>(info.uname_s.nodename);
-				});
+				&data_source_base::make<string_source, const std::string &>, info.uname_s.nodename);
 	}
 }

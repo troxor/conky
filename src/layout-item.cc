@@ -54,7 +54,7 @@ namespace conky {
 
 		switch(l.type(-1)) {
 			case lua::TSTRING:
-				return std::make_shared<string_source>(l.tostring(-1));
+				return std::make_shared<string_source>(l, l.tostring(-1));
 
 			case lua::TUSERDATA:
 			case lua::TLIGHTUSERDATA:
