@@ -485,12 +485,6 @@ void print_nodename_short(struct text_object *obj, char *p, int p_max_size)
 	}
 }
 
-void print_sysname(struct text_object *obj, char *p, int p_max_size)
-{
-	(void)obj;
-	snprintf(p, p_max_size, "%s", info.uname_s.sysname);
-}
-
 #if defined(__DragonFly__)
 void print_version(struct text_object *obj, char *p, int p_max_size)
 {
@@ -754,5 +748,7 @@ namespace conky {
 	namespace {
 		register_data_source nodename("nodename",
 				&data_source_base::make<string_source, const std::string &>, info.uname_s.nodename);
+		register_data_source sysname("sysname",
+				&data_source_base::make<string_source, const std::string &>, info.uname_s.sysname);
 	}
 }

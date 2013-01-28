@@ -1207,8 +1207,6 @@ struct text_object *construct_text_object(char * /*s*/, const char * /*arg*/,
 		scan_bar(obj, arg, 1);
 		obj->callbacks.barval = &swap_barval;
 	/* XXX: swapgraph, swapgauge? */
-	END OBJ(sysname, 0)
-		obj->callbacks.print = &print_sysname;
 	END OBJ(time, 0)
 		scan_time(obj, arg);
 		obj->callbacks.print = &print_time;
