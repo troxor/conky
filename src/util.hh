@@ -26,6 +26,48 @@
 
 namespace conky {
 
+	struct point {
+		typedef int32_t type;
+
+		type x;
+		type y;
+
+		point()
+			: x(0), y(0)
+		{}
+
+		point(type x_, type y_)
+			: x(x_), y(y_)
+		{}
+	};
+
+	inline point equal_point(point::type xy)
+	{ return { xy, xy }; }
+
+	inline point operator+(const point &l, const point &r)
+	{ return { l.x+r.x, l.y+r.y }; }
+
+	inline point operator-(const point &l, const point &r)
+	{ return { l.x-r.x, l.y-r.y }; }
+
+	inline const point& operator+=(point &l, const point &r)
+	{ l.x += r.x; l.y += r.y; return l; }
+
+	inline point min(const point &l, const point &r)
+	{ return { std::min(l.x, r.x), std::min(l.y, r.y) }; }
+
+	inline point max(const point &l, const point &r)
+	{ return { std::max(l.x, r.x), std::max(l.y, r.y) }; }
+
+	inline point operator/(const point &l, int32_t r)
+	{ return { l.x/r, l.y/r }; }
+
+	inline bool operator==(const point &l, const point &r)
+	{ return l.x == r.x && l.y == r.y; }
+
+	inline bool operator!=(const point &l, const point &r)
+	{ return not (l == r); }
+
 	class non_copyable {
 		non_copyable(const non_copyable &) = delete;
 		const non_copyable& operator=(const non_copyable &) = delete;
@@ -39,6 +81,33 @@ namespace conky {
 	{
 		std::lock_guard<Mutex> lock(mutex);
 		return std::move(fn());
+	}
+
+	template<typename Signed1, typename Signed2>
+	bool between(Signed1 value, Signed2 min,
+			typename std::enable_if<std::is_signed<Signed1>::value
+								== std::is_signed<Signed2>::value, Signed2>::type max)
+	{ return value >= min && value <= max; }
+
+	template<typename Signed1, typename Unsigned2>
+	bool between(Signed1 value, Unsigned2 min,
+			typename std::enable_if<std::is_unsigned<Unsigned2>::value
+								&& std::is_signed<Signed1>::value, Unsigned2>::type max)
+	{
+		return value >= 0
+			&& static_cast<typename std::make_unsigned<Signed1>::type>(value) >= min
+			&& static_cast<typename std::make_unsigned<Signed1>::type>(value) <= max;
+	}
+
+	template<typename Unsigned1, typename Signed2>
+	bool between(Unsigned1 value, Signed2 min,
+			typename std::enable_if<std::is_signed<Signed2>::value
+								&& std::is_unsigned<Unsigned1>::value, Signed2>::type max)
+	{
+		return max >= 0
+			&& value <= static_cast<typename std::make_unsigned<Signed2>::type>(max)
+			&& ( min <= 0
+				|| value >= static_cast<typename std::make_unsigned<Signed2>::type>(min) );
 	}
 } /* namespace conky */
 

@@ -57,33 +57,6 @@ namespace conky {
 		{}
 	};
 
-	template<typename Signed1, typename Signed2>
-	bool between(Signed1 value, Signed2 min,
-			typename std::enable_if<std::is_signed<Signed1>::value
-								== std::is_signed<Signed2>::value, Signed2>::type max)
-	{ return value >= min && value <= max; }
-
-	template<typename Signed1, typename Unsigned2>
-	bool between(Signed1 value, Unsigned2 min,
-			typename std::enable_if<std::is_unsigned<Unsigned2>::value
-								&& std::is_signed<Signed1>::value, Unsigned2>::type max)
-	{
-		return value >= 0
-			&& static_cast<typename std::make_unsigned<Signed1>::type>(value) >= min
-			&& static_cast<typename std::make_unsigned<Signed1>::type>(value) <= max;
-	}
-
-	template<typename Unsigned1, typename Signed2>
-	bool between(Unsigned1 value, Signed2 min,
-			typename std::enable_if<std::is_signed<Signed2>::value
-								&& std::is_unsigned<Unsigned1>::value, Signed2>::type max)
-	{
-		return max >= 0
-			&& value <= static_cast<typename std::make_unsigned<Signed2>::type>(max)
-			&& ( min <= 0
-				|| value >= static_cast<typename std::make_unsigned<Signed2>::type>(min) );
-	}
-
 	void type_check(lua::state &l, int index, lua::Type type1, lua::Type type2,
 			const std::string &description);
 

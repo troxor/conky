@@ -36,48 +36,6 @@
 
 namespace conky {
 
-	struct point {
-		typedef int32_t type;
-
-		type x;
-		type y;
-
-		point()
-			: x(0), y(0)
-		{}
-
-		point(type x_, type y_)
-			: x(x_), y(y_)
-		{}
-	};
-
-	inline point equal_point(point::type xy)
-	{ return { xy, xy }; }
-
-	inline point operator+(const point &l, const point &r)
-	{ return { l.x+r.x, l.y+r.y }; }
-
-	inline point operator-(const point &l, const point &r)
-	{ return { l.x-r.x, l.y-r.y }; }
-
-	inline const point& operator+=(point &l, const point &r)
-	{ l.x += r.x; l.y += r.y; return l; }
-
-	inline point min(const point &l, const point &r)
-	{ return { std::min(l.x, r.x), std::min(l.y, r.y) }; }
-
-	inline point max(const point &l, const point &r)
-	{ return { std::max(l.x, r.x), std::max(l.y, r.y) }; }
-
-	inline point operator/(const point &l, int32_t r)
-	{ return { l.x/r, l.y/r }; }
-
-	inline bool operator==(const point &l, const point &r)
-	{ return l.x == r.x && l.y == r.y; }
-
-	inline bool operator!=(const point &l, const point &r)
-	{ return not (l == r); }
-
 	class output_method: public thread_base {
 	public:
 		output_method(uint32_t period, bool use_pipe)
