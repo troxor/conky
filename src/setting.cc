@@ -198,16 +198,6 @@ namespace conky {
 		}
 	}
 
-	void type_check(lua::state &l, int index, lua::Type type1, lua::Type type2,
-			const std::string &description) {
-		lua::Type t = l.type(index);
-		if(t != type1 && t != type2) {
-			throw conversion_error(std::string("Invalid value of type '") + l.type_name(t)
-					+ "' for " + description + ". Expected value of type '"
-					+ l.type_name(type1) + "'.");
-		}
-	}
-
 	void set_config_settings(lua::state &l)
 	{
 		lua::stack_sentry s(l);
