@@ -29,6 +29,7 @@
  */
 
 #include "config.h"
+#include "build.h"
 #include "conky.h"
 #include "core.h"
 #include "fs.h"
@@ -722,18 +723,26 @@ int updatenr_iftest(struct text_object *)
 
 namespace conky {
 	namespace {
-		register_data_source nodename("nodename",
-				&data_source_base::make<string_source, const std::string &>, info.uname_s.nodename);
-		register_data_source sysname("sysname",
-				&data_source_base::make<string_source, const std::string &>, info.uname_s.sysname);
-		register_data_source kernel("kernel",
-				&data_source_base::make<string_source, const std::string &>, info.uname_s.release);
-		register_data_source machine("machine",
-				&data_source_base::make<string_source, const std::string &>, info.uname_s.machine);
+		class register_string_source: private register_data_source {
+		public:
+			register_string_source(const std::string &name, const char *value)
+				: register_data_source(name,
+						&data_source_base::make<string_source, const std::string &>, value)
+			{ }
+		};
+
+		register_string_source nodename("nodename", info.uname_s.nodename);
+		register_string_source sysname("sysname", info.uname_s.sysname);
+		register_string_source kernel("kernel", info.uname_s.release);
+		register_string_source machine("machine", info.uname_s.machine);
 		register_data_source nodename_short("nodename_short",
 			[](lua::state &l) -> std::shared_ptr<string_source> {
 				std::string name = info.uname_s.nodename;
 				return data_source_base::make<string_source>(l, name.substr(0, name.find('.')));
 			});
+
+		register_string_source conky_version("conky_version", VERSION);
+		register_string_source conky_build_date("conky_build_date", BUILD_DATE);
+		register_string_source conky_build_arch("conky_build_arch", BUILD_ARCH);
 	}
 }

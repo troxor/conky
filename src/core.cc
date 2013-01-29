@@ -643,12 +643,6 @@ struct text_object *construct_text_object(char * /*s*/, const char * /*arg*/,
 		}
 #endif /* BUILD_NCURSES */
 		obj->callbacks.print = &new_fg;
-	END OBJ(conky_version, 0)
-		obj_be_plain_text(obj, VERSION);
-	END OBJ(conky_build_date, 0)
-		obj_be_plain_text(obj, BUILD_DATE);
-	END OBJ(conky_build_arch, 0)
-		obj_be_plain_text(obj, BUILD_ARCH);
 	END OBJ(downspeed, &update_net_stats)
 		parse_net_stat_arg(obj, arg, free_at_crash);
 		obj->callbacks.print = &print_downspeed;
