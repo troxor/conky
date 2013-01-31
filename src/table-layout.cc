@@ -78,7 +78,7 @@ namespace conky {
 		return t;
 	}
 
-	size_t table_layout::read_columns()
+	size_t table_layout::read_columns(lua::state &l)
 	{
 		l.checkstack(1);
 		lua::stack_sentry s(l, -1);
@@ -132,20 +132,18 @@ namespace conky {
 		return row;
 	}
 
-	table_layout::table_layout(lua::state &l_)
-		: l(l_)
+	table_layout::table_layout(lua::state &l)
+		: Base(l)
 	{
 		l.checkstack(1);
 		lua::stack_sentry s(l, -1);
 
 		l.rawgetfield(-1, "cols");
-		size_t cols = read_columns();
+		size_t cols = read_columns(l);
 
 		for(size_t i = 1; l.rawgeti(-1, i), !l.isnil(-1); ++i) {
 			item_grid.push_back(read_row(l, i, cols));
 		} l.pop();
-
-		scope_ref = l.ref(lua::REGISTRYINDEX);
 
 		if(cols == 0) {
 			for(auto i = item_grid.begin(); i != item_grid.end(); ++i) {
@@ -175,34 +173,10 @@ namespace conky {
 		}
 	}
 
-	table_layout::DataMap::iterator table_layout::make_data(output_method &om)
-	{
-		auto scope = synchronized(l, [&]() -> std::unique_ptr<const output_method::scope> {
-				l.rawgeti(lua::REGISTRYINDEX, scope_ref);
-				return om.parse_scope(l);
-		});
-		return synchronized(data_mutex, [&] {
-				return data_map.insert(DataMap::value_type(&om,
-						data(std::move(scope), item_grid.size(), item_grid[0].size()))).first;
-		});
-	}
-
-	point table_layout::size(output_method &om)
+	point table_layout::size(output_method &om, priv::grid &data)
 	{
 		if(empty())
 			return { 0, 0 };
-
-		DataMap::iterator data;
-		bool end;
-		{
-			std::lock_guard<std::mutex> lock(data_mutex);
-			data = data_map.find(&om);
-			end = data == data_map.end();
-		}
-		if(end)
-			data = make_data(om);
-
-		auto old = om.enter_scope(data->second.scope);
 
 		std::vector<point::type> y_data(item_grid.size(), 0);
 		std::vector<point::type> x_data(item_grid[0].size(), 0);
@@ -214,7 +188,7 @@ namespace conky {
 		for(size_t i = 0; i < item_grid.size(); ++i) {
 			point::type xpos = 0;
 			for(size_t j = 0; j < item_grid[i].size(); ++j) {
-				item_data &d = data->second.grid[i][j];
+				priv::item &d = data[i][j];
 				d.size = item_grid[i][j]->size(om);
 				xpos += d.size.x + separator.x;
 
@@ -235,7 +209,7 @@ namespace conky {
 		for(size_t i = 0; i < item_grid.size(); ++i) {
 			point::type xpos = 0;
 			for(size_t j = 0; j < item_grid[i].size(); ++j) {
-				item_data &d = data->second.grid[i][j];
+				priv::item &d = data[i][j];
 				d.pos.x = xpos + align(x_data[j], d.size.x, columns[j].align);
 				d.pos.y = ypos + align(y_data[i], d.size.y, alignment::CENTER);
 				xpos += x_data[j] + separator.x;
@@ -243,33 +217,17 @@ namespace conky {
 			ypos += y_data[i] + separator.y;
 		}
 
-		om.leave_scope(std::move(old));
-
 		return res;
 	}
 
-	void table_layout::draw(output_method &om, const point &p, const point &size)
+	void table_layout::draw(output_method &om, const point &p, const point &size, priv::grid &data)
 	{
-		if(empty())
-			return;
-
-		DataMap::iterator data;
-		{
-			std::lock_guard<std::mutex> l(data_mutex);
-			data = data_map.find(&om);
-			assert(data != data_map.end());
-		}
-
-		auto old = om.enter_scope(data->second.scope);
-
 		for(size_t i = 0; i < item_grid.size(); ++i) {
 			for(size_t j = 0; j < item_grid[i].size(); ++j) {
-				item_data &d = data->second.grid[i][j];
+				priv::item &d = data[i][j];
 
 				item_grid[i][j]->draw(om, p+d.pos, min(d.size, size-d.pos));
 			}
 		}
-
-		om.leave_scope(std::move(old));
 	}
 }

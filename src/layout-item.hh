@@ -59,6 +59,6 @@ namespace conky {
 	 */
 	void export_layout_engines(lua::state &l);
 
-}
+} /* namespace conky */
 
 #endif /* LAYOUT_ITEM_HH */

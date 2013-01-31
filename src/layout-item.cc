@@ -28,6 +28,7 @@
 #include "logging.h"
 #include "data-source.hh"
 #include "table-layout.hh"
+#include "fixed-layout.hh"
 
 namespace conky {
 	namespace {
@@ -87,5 +88,8 @@ namespace conky {
 
 		l.pushfunction(&layout_factory<table_layout>);
 		l.rawsetfield(-2, "table");
+
+		l.pushfunction(&layout_factory<fixed_layout>);
+		l.rawsetfield(-2, "fixed");
 	}
 }

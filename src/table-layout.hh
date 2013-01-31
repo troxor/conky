@@ -28,12 +28,24 @@
 #include <vector>
 
 #include "list_map.hh"
-#include "layout-item.hh"
+#include "layout-engine.hh"
 #include "luamm.hh"
 
 namespace conky {
 
-	class table_layout: public layout_item {
+	namespace priv {
+		struct item {
+			point pos;
+			point size;
+		};
+
+		typedef std::vector<item> row;
+		typedef std::vector<row> grid;
+	}
+
+	class table_layout: public layout_engine<priv::grid> {
+		typedef layout_engine<priv::grid> Base;
+
 	public:
 		enum class alignment { LEFT, CENTER, RIGHT };
 
@@ -42,53 +54,30 @@ namespace conky {
 			uint32_t width;
 			alignment align;
 		};
-		struct item_data {
-			point pos;
-			point size;
-		};
-
 		typedef std::vector<std::shared_ptr<layout_item>> ItemRow;
-		typedef std::vector<item_data> DataRow;
-		typedef std::vector<DataRow> DataGrid;
 
-		struct data {
-			std::unique_ptr<const output_method::scope> scope;
-			DataGrid grid;
-
-			data() { }
-
-			data(std::unique_ptr<const output_method::scope> &&scope_, size_t cols, size_t rows)
-				: scope(std::move(scope_)), grid(cols, DataRow(rows))
-			{}
-		};
-
-		typedef list_map<const output_method *, data> DataMap;
-
-		lua::state &l;
 		std::vector<column> columns;
 		std::vector<ItemRow> item_grid;
-		DataMap data_map;
-		std::mutex data_mutex;
-		int scope_ref;
 
 		static column default_column;
 
-		size_t read_columns();
+		size_t read_columns(lua::state &l);
 		static column read_column(lua::state &l, size_t colno);
 		static point::type align(point::type have, point::type need, alignment a);
 		ItemRow read_row(lua::state &l, size_t rowno, size_t cols);
 		std::shared_ptr<layout_item> read_cell(lua::state &l, size_t rowno, size_t colno);
-		DataMap::iterator make_data(output_method &om);
 
 		bool empty() const { return item_grid.empty() || item_grid[0].empty(); }
 
+	protected:
+		virtual priv::grid make_data()
+		{ return priv::grid(item_grid.size(), priv::row(item_grid[0].size())); }
+
+		virtual point size(output_method &om, priv::grid &data);
+		virtual void draw(output_method &om, const point &p, const point &size, priv::grid &data);
+
 	public:
-		table_layout(lua::state &l_);
-		virtual ~table_layout() { l.unref(lua::REGISTRYINDEX, scope_ref); }
-
-		virtual point size(output_method &om);
-
-		virtual void draw(output_method &om, const point &p, const point &size);
+		table_layout(lua::state &l);
 	};
 }
 
