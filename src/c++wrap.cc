@@ -97,17 +97,19 @@ std::string strprintf(const char *format, ...)
 
 	va_list list;
 	va_start(list, format);
-
 	int r = vsnprintf(&*str.begin(), str.size(), format, list);
+	va_end(list);
+
 	if(r < 0)
 		throw errno_error("strprintf");
 	if(static_cast<size_t>(r) >= str.size()) {
 		str.resize(r+1);
+		va_start(list, format);
 		r = vsnprintf(&*str.begin(), str.size(), format, list);
+		va_end(list);
 	}  else
 		str.resize(r+1);
 	assert(str.size() == r+1u);
 
-	va_end(list);
 	return str;
 }
