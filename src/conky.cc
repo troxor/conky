@@ -1889,7 +1889,7 @@ void load_config_file()
 			l.loadfile(current_config.c_str());
 	}
 	catch(lua::syntax_error &e) {
-#define SYNTAX_ERR_READ_CONF "Syntax error (%s) while reading config file. "
+#define SYNTAX_ERR_READ_CONF "Syntax error while reading config file.\n%s"
 #ifdef BUILD_OLD_CONFIG
 		NORM_ERR(_(SYNTAX_ERR_READ_CONF), e.what());
 		NORM_ERR(_("Assuming it's in old syntax and attempting conversion."));
