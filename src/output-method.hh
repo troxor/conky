@@ -36,13 +36,11 @@
 
 namespace conky {
 
-	class output_method: public thread_base {
+	class output_method {
 	public:
-		output_method(uint32_t period, bool use_pipe)
-			: thread_base(reinterpret_cast<size_t>(this), period, false, use_pipe)
-		{}
+		virtual ~output_method() { }
 
-		class scope: private non_copyable {
+		class scope: private conky::non_copyable {
 		public:
 			virtual ~scope() { }
 		};
@@ -58,7 +56,7 @@ namespace conky {
 		virtual void draw_text(const std::string &text, const point &p, const point &size) = 0;
 	};
 
-	extern thread_container<output_method, false> output_methods;
+	extern task_container<output_method> output_methods;
 }
 
 #endif /* OUTPUT_METHOD_HH */

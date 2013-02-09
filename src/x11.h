@@ -93,11 +93,11 @@ extern conky::simple_config_setting<alignment>   text_alignment;
 
 namespace conky {
 
-	class x11_output: public output_method {
+	class x11_output: public output_method, public piped_thread {
 		class true_colour_factory;
 
 	public:
-		class colour: private non_copyable {
+		class colour: private conky::non_copyable {
 		protected:
 			const XColor c;
 			const uint16_t alpha;
@@ -115,7 +115,7 @@ namespace conky {
 		};
 
 	private:
-		class colour_factory: private non_copyable {
+		class colour_factory: private conky::non_copyable {
 		protected:
 			Display &display;
 			const Colormap colourmap;
@@ -235,7 +235,7 @@ namespace conky {
 		enum class buffer_type { SINGLE, PIXMAP, XDBE };
 		enum { ALPHA_TRANSPARENT = 0, ALPHA_OPAQUE = 0xffff };
 
-		x11_output(uint32_t period, const std::string &display_);
+		x11_output(const std::string &display_);
 		~x11_output();
 
 		virtual std::unique_ptr<const scope> parse_scope(lua::state &l);
@@ -269,7 +269,7 @@ namespace conky {
 		class out_to_x_setting: public simple_config_setting<bool> {
 			typedef simple_config_setting<bool> Base;
 
-			thread_handle<x11_output> om;
+			std::shared_ptr<x11_output> om;
 		protected:
 			virtual void cleanup()
 			{ om.reset(); }
@@ -281,7 +281,7 @@ namespace conky {
 
 			virtual const bool set(const bool &r, bool init);
 
-			const thread_handle<x11_output>& get_om()
+			const std::shared_ptr<x11_output>& get_om()
 			{ return om; }
 		};
 

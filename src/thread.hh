@@ -28,6 +28,7 @@
 #include <memory>
 #include <thread>
 #include <mutex>
+#include <queue>
 #include <tuple>
 #include <unordered_set>
 
@@ -35,140 +36,242 @@
 
 #include "c++wrap.hh"
 #include "semaphore.hh"
+#include "util.hh"
 
 namespace conky {
-	// forward declarations
-	template<typename Thread>
-	class thread_handle;
 
-	/*
-	 * Base class for threads that can be stored in a thread container, which can then be used
-	 * for managing them collectively. A descendant class should implement:
-	 * - work(): the actual work to be done. It is run whenever someone calls run_all_threads on
-	 *   the thread_container
+	/**
+	 * Base class for tasks that can be stored in a task container, which can then be used
+	 * for managing them collectively. Deriveded class should implement:
+	 * - tick(): the actual work to be done. It is run whenever someone calls run_all_tasks on
+	 *   the task_container
 	 * - operator==(): optional. If you want the container to automatically merge multiply
-	 *   registered threads. This operator determines if two threads are considered identical.
-	 * - merge(): optional, used when merging two threads. Use it to transfer any interesting
-	 *   info from the other thread, before it is destroyed.
+	 *   registered tasks. This operator determines if two tasks are considered equivalent.
+	 * - merge(): optional, used when merging two tasks. Use it to transfer any interesting
+	 *   info from the other task, before it is destroyed.
+	 * Tasks shold be used for work, which doesn't take long (doesn't block waiting for network
+	 * connections or similar).
 	 */
-	class thread_base {
-		semaphore sem_start;
-		std::thread *thread;
-		const size_t hash;
-		uint32_t period;
-		uint32_t remaining;
-		std::pair<int, int> pipefd;
-		const bool wait;
+	class task_base {
+	public:
+		virtual ~task_base() { }
+
+		virtual void tick() = 0;
+		virtual void merge(task_base &&) { }
+		virtual bool operator==(const task_base &) { return false; }
+		virtual size_t get_hash() const { return reinterpret_cast<size_t>(this); }
+
+	};
+
+	/**
+	 * Base class for tasks that can take an unpredictible amount of time. For this reason, they
+	 * are run in a separate dedicated thread. You should do your work in the work(), which will
+	 * be the main function of the thread. When the work is done, you should use the wait()
+	 * function to wait for the next update signal. If is_done() returns true, you should return
+	 * from the work function.
+	 */
+	class thread_task: public task_base {
+		semaphore start;
 		bool done;
-		uint8_t unused;
 
-		thread_base(const thread_base &) = delete;
-		thread_base& operator=(const thread_base &) = delete;
+	protected:
+		bool is_done() const { return done; }
+		void wait() { start.wait(); }
 
-		virtual bool operator==(const thread_base &) { return false; }
+	public:
+		thread_task() : done(false) { }
 
-		void run(semaphore &sem_wait);
-		void stop();
+		virtual void tick() { start.post(); }
+		virtual void stop() { done = true; tick(); }
+		virtual void work() = 0;
+	};
 
-		static void deleter(thread_base *ptr)
-		{
-			ptr->stop();
-			delete ptr;
-		}
+	/**
+	 * Just like the previous class, only it additionally signals the update by writing to a
+	 * pipe. This enables waiting for the update using select() et al.
+	 */
+	class piped_thread: public thread_task {
+		typedef thread_task Base;
 
-		template<typename Thread, bool auto_delete>
-		friend class thread_container;
+		std::pair<int, int> pipefd;
 
 	protected:
 		enum signal { DONE, NEXT };
 
-		/*
-		 * Construct a new thread. Parameters:
-		 * - hash: the hash value of this thread. Only threads with the same hash are considered
-		 *   for merging.
-		 * - period: the periodicity of this thread. Every period-th call to
-		 *   container.run_all_threads() calls work() in this thread.
-		 * - wait: should run_all_threads() wait for work() to complete before returning?
-		 * - use_pipe: should the container use a pipe to signal this thread to? One
-		 *   can then use select() on the descriptor returned by signalfd() to wait for the
-		 *   termination or the start-next-iteration signal. In the former case, an 'X' is
-		 *   written to the pipe. In the latter: 'T'.
-		 */
-		thread_base(size_t hash_, uint32_t period_, bool wait_, bool use_pipe);
-
-		int signalfd()
-		{ return pipefd.first; }
+		int signalfd() { return pipefd.first; }
 
 		// If there is no signal on signalfd(), it will block.
 		signal get_signal();
 
-		bool is_done()
-		{ return done; }
-
-		virtual void start_routine(semaphore &sem_wait);
-		virtual void work() = 0;
-		virtual void merge(thread_base &&);
-
 	public:
-		virtual ~thread_base();
+		virtual void tick();
+		virtual void stop();
+
+		piped_thread()
+			: pipefd(pipe2(O_CLOEXEC))
+		{ fcntl_setfl(pipefd.second, fcntl_getfl(pipefd.second) | O_NONBLOCK); }
+
+		virtual ~piped_thread();
 	};
 
 	/*
-	 * A class used for manipulating threads stored in a thread_container. It's a restricted
-	 * version of shared_ptr.
+	 * A class for tasks, which automatically handles merging of identical objects. Two tasks
+	 * are considered identical if the have the same value for all Keys template parameters. You
+	 * can choose whether to apply this template to task_base, thread_task or piped_thread.
 	 */
-	template<typename Thread>
-	class thread_handle: private std::shared_ptr<Thread> {
-		typedef std::shared_ptr<Thread> Base;
-	
-		explicit thread_handle(Thread *ptr)
-			: Base(ptr, &thread_base::deleter)
-		{}
-
-		thread_handle(Base &&ptr)
-			: Base(std::move(ptr))
-		{}
-
-		template<typename Thread_, bool auto_delete>
-		friend class thread_container;
-
+	template<typename Base, typename... Keys>
+	class key_mergable: public Base {
 	public:
-		thread_handle()
-			: Base()
-		{}
+		typedef std::tuple<Keys...> Tuple;
 
-		using Base::operator->;
-		using Base::operator*;
-		using Base::get;
-		using Base::reset;
+	protected:
+		const Tuple tuple;
+
+		template<size_t i>
+		typename std::add_lvalue_reference<const typename std::tuple_element<i, Tuple>::type>::type
+		get()
+		{ return std::get<i>(tuple); }
+
+		virtual bool operator==(const task_base &other)
+		{ return tuple == dynamic_cast<const key_mergable &>(other).tuple; }
+
+		key_mergable(const Keys &... keys) : tuple(keys...) { }
+		key_mergable(const Tuple &tuple) : tuple(tuple) { }
 	};
-		
-	/*
-	 * Threads are registered with the register_thread() function. You pass the class name as the
-	 * template parameter, and any additional parameters to the constructor as function
-	 * parameters. The period parameter specifies how often the thread will run.
-	 * register_thread() returns a handle to the newly created object. If auto_delete is true,
-	 * the thread will be run only as long as someone holds the object handle.
+
+	namespace priv {
+		class task_holder: private non_copyable {
+			enum {UNUSED_MAX = 5};
+
+			uint32_t period;
+			uint32_t remaining;
+			uint8_t unused;
+
+		protected:
+
+			virtual bool unique() = 0;
+			virtual task_base& get_task() const = 0;
+			virtual void run() = 0;
+
+		public:
+			const size_t hash;
+
+			bool tick();
+
+			bool operator==(const task_holder &other) const
+			{ return get_task() == other.get_task(); }
+
+			void merge(task_holder &&other);
+			virtual std::shared_ptr<task_base> get_ptr() = 0;
+
+			task_holder(uint32_t period_, size_t hash_)
+				: period(period_), remaining(0), unused(0), hash(hash_)
+			{ }
+
+			virtual ~task_holder() { }
+		};
+
+		class single_task_holder: public task_holder {
+			std::shared_ptr<thread_task> task;
+			std::thread *thread;
+
+		protected:
+			virtual void run();
+			virtual bool unique() { return task.unique(); }
+			virtual task_base& get_task() const { return *task; }
+
+		public:
+			single_task_holder(uint32_t period, const std::shared_ptr<thread_task> &task_)
+				: task_holder(period, task_->get_hash()), task(task_), thread(NULL)
+			{ }
+			virtual ~single_task_holder();
+
+			virtual std::shared_ptr<task_base> get_ptr() { return task; }
+		};
+
+		class task_pool {
+			std::mutex mutex;
+			std::condition_variable cv;
+			std::queue<std::shared_ptr<task_base>> queue;
+			std::vector<std::thread> threads;
+			semaphore sem;
+			uint32_t to_wait;
+			bool done;
+
+			void runner();
+
+		public:
+			task_pool(size_t threads_)
+				: to_wait(0), done(false)
+			{
+				for(size_t i = 0; i < threads_; ++i)
+					threads.emplace_back(&task_pool::runner, this);
+			}
+
+			~task_pool();
+
+			void add(const std::shared_ptr<task_base> &handle)
+			{
+				++to_wait;
+				std::lock_guard<std::mutex> lock(mutex);
+				queue.push(handle);
+				cv.notify_one();
+			}
+
+			void wait() { while(to_wait-- > 0) sem.wait(); }
+		};
+
+		class pooled_task_holder: public task_holder {
+			task_pool &pool;
+			std::shared_ptr<task_base> task;
+
+		protected:
+			virtual void run() { pool.add(task); }
+			virtual bool unique() { return task.unique(); }
+			virtual task_base& get_task() const { return *task; }
+
+		public:
+			pooled_task_holder(uint32_t period_, task_pool &pool_,
+								const std::shared_ptr<task_base> &task_)
+				: task_holder(period_, task_->get_hash()), pool(pool_), task(task_)
+			{ }
+
+			virtual std::shared_ptr<task_base> get_ptr() { return task; }
+		};
+
+		template<typename Head>
+		inline size_t hash(const Head &head) { return std::hash<Head>()(head); }
+
+		template<typename Head, typename... Tail>
+		inline size_t hash(const Head &head, const Tail &... tail)
+		{ return std::hash<Head>()(head) + 47 * hash(tail...); }
+	}
+
+	/**
+	 * Task container, which manages the running of tasks.  task_base tasks are registered with
+	 * the register_simple_task() function, while for thread_task tasks we have
+	 * register_threaded_task(). You pass the class name as the template parameter, and any
+	 * additional parameters to the constructor as function parameters. The period parameter
+	 * specifies how often the task will run - the task is run on every period-th invocation of
+	 * run_all_tasks().  these functions return either a pointer to the newly created object or
+	 * to a previously registered task, if there is an equivalent one.  The tasks will be run
+	 * only as long as someone holds the object pointer.
 	 */
-	template<typename Thread = thread_base, bool auto_delete = true>
-	class thread_container {
-		static_assert(std::is_base_of<thread_base, Thread>::value,
-				"Thread must be a descendant of thread_base");
-
-		enum {UNUSED_MAX = 5};
-
-		typedef thread_handle<Thread> handle;
-		typedef std::unordered_set<handle, size_t (*)(const handle &),
-								   bool (*)(const handle &, const handle &)>
-		Threads;
+	template<typename Task = task_base>
+	class task_container {
+		typedef std::unique_ptr<priv::task_holder> holder_ptr;
+		typedef std::unordered_set<holder_ptr, size_t (*)(const holder_ptr &),
+								   bool (*)(const holder_ptr &, const holder_ptr &)>
+		Tasks;
 
 		semaphore sem_wait;
-		Threads threads;
+		Tasks tasks;
+		priv::task_pool pool;
 
-		static size_t get_hash(const handle &h) { return h->hash; }
-		static bool is_equal(const handle &a, const handle &b)
+		static size_t get_hash(const holder_ptr &h) { return h->hash; }
+		static bool is_equal(const holder_ptr &a, const holder_ptr &b)
 		{
-			if(a->hash != b->hash)
+			if(get_hash(a) != get_hash(b))
 				return false;
 
 			if(typeid(*a) != typeid(*b))
@@ -178,118 +281,80 @@ namespace conky {
 		}
 
 
-		handle do_register_thread(const handle &h)
+		std::shared_ptr<task_base> register_holder(std::unique_ptr<priv::task_holder> &&h)
 		{
-			const auto &p = threads.insert(h);
+			const auto &p = tasks.insert(std::move(h));
 
 			if(not p.second)
 				(*p.first)->merge(std::move(*h));
 
-			return *p.first;
+			return (*p.first)->get_ptr();
 		}
 
-	public:
-		thread_container()
-			: threads(1, get_hash, is_equal)
-		{}
-
-		/*
-		 * Constructs a thread by passing the parameters to its constructor and registers it with
-		 * the container.
-		 */
-		template<typename Thread_, typename... Params>
-		thread_handle<Thread_> register_thread(uint32_t period, Params&&... params)
+		std::shared_ptr<task_base>
+		do_register_task(uint32_t period, const std::shared_ptr<task_base> &task)
 		{
-			static_assert(std::is_base_of<Thread, Thread_>::value,
-					"Thread_ must be a descendant of Thread");
-
-			return std::dynamic_pointer_cast<Thread_>(do_register_thread(
-						handle(new Thread_(period, std::forward<Params>(params)...))
+			return register_holder(std::unique_ptr<priv::task_holder>(
+						new priv::pooled_task_holder(period, pool, task)
 					));
 		}
 
-		const Threads &get_threads() const
-		{ return threads; }
-
-		void run_all_threads();
-	};
-
-	namespace priv {
-		template<size_t pos, typename... Elements>
-		struct hash_tuple {
-			typedef std::tuple<Elements...>                         Tuple;
-			typedef typename std::tuple_element<pos-1, Tuple>::type Element;
-
-			static inline size_t hash(const Tuple &tuple)
-			{
-				return std::hash<Element>()(std::get<pos-1>(tuple))
-						+ 47 * hash_tuple<pos-1, Elements...>::hash(tuple);
-			}
-		};
-
-		template<typename... Elements>
-		struct hash_tuple<0, Elements...> {
-			static inline size_t hash(const std::tuple<Elements...> &)
-			{ return 0; }
-		};
-	}
-
-	/*
-	 * A class for threads, which automatically handles merging of identical objects. Two threads
-	 * are considered identical if the have the same value for all Keys template parameters.
-	 */
-	template<typename... Keys>
-	class thread: public thread_base {
-		virtual bool operator==(const thread_base &other)
-		{ return tuple == dynamic_cast<const thread &>(other).tuple; }
-
-	public:
-		typedef std::tuple<Keys...> Tuple;
-
-	protected:
-		const Tuple tuple;
-
-		template<size_t i>
-		typename std::add_lvalue_reference<
-					const typename std::tuple_element<i, Tuple>::type
-				>::type
-		get()
-		{ return std::get<i>(tuple); }
-
-	public:
-		thread(uint32_t period_, bool wait_, const Tuple &tuple_, bool use_pipe = false)
-			: thread_base(priv::hash_tuple<sizeof...(Keys), Keys...>::hash(tuple_),
-						period_, wait_, use_pipe),
-			  tuple(tuple_)
-		{}
-	};
-
-
-	template<typename Thread, bool auto_delete>
-	void thread_container<Thread, auto_delete>::run_all_threads()
-	{
-		size_t wait = 0;
-		for(auto i = threads.begin(); i != threads.end(); ) {
-			thread_base &thr = **i;
-
-			if(thr.remaining-- == 0) {
-				if(!auto_delete || !i->unique() || ++thr.unused < UNUSED_MAX) {
-					thr.remaining = thr.period-1;
-					thr.run(sem_wait);
-					if(thr.wait)
-						++wait;
-				}
-			}
-			if(auto_delete && thr.unused == UNUSED_MAX) {
-				auto t = i;
-				++i;
-				threads.erase(t);
-			} else
-				++i;
+		std::shared_ptr<task_base>
+		do_register_thread(uint32_t period, const std::shared_ptr<thread_task> &task)
+		{
+			return register_holder(std::unique_ptr<priv::task_holder>(
+						new priv::single_task_holder(period, task)
+					));
 		}
 
-		while(wait-- > 0)
-			sem_wait.wait();
+	public:
+		// TODO put some intelligence into choosing pool size ?
+		task_container()
+			: tasks(1, get_hash, is_equal), pool(2)
+		{ }
+
+		template<typename Task_, typename... Params>
+		std::shared_ptr<Task_> register_simple_task(uint32_t period, Params&&... params)
+		{
+			static_assert(std::is_base_of<Task, Task_>::value,
+					"Task_ must be derived from Task");
+			static_assert(std::is_base_of<task_base, Task_>::value,
+					"Task_ must be derived from task_base");
+
+			return std::dynamic_pointer_cast<Task_>(do_register_task(period,
+						std::shared_ptr<task_base>(new Task_(std::forward<Params>(params)...))
+					));
+		}
+
+		template<typename Task_, typename... Params>
+		std::shared_ptr<Task_> register_threaded_task(uint32_t period, Params&&... params)
+		{
+			static_assert(std::is_base_of<Task, Task_>::value,
+					"Task_ must be derived from Task");
+			static_assert(std::is_base_of<thread_task, Task_>::value,
+					"Task_ must be derived from thread_task");
+
+			return std::dynamic_pointer_cast<Task_>(do_register_thread(period,
+						std::shared_ptr<thread_task>(new Task_(std::forward<Params>(params)...))
+					));
+		}
+
+		void run_all_tasks();
+	};
+
+	template<typename Thread>
+	void task_container<Thread>::run_all_tasks()
+	{
+		for(auto i = tasks.begin(); i != tasks.end(); ) {
+			if((*i)->tick())
+				++i;
+			else {
+				auto t = i++;
+				tasks.erase(t);
+			}
+		}
+
+		pool.wait();
 	}
 }
 

@@ -42,16 +42,14 @@
 #include "update-cb.hh"
 
 namespace {
-	class exec_cb: public conky::callback<std::string, std::string> {
-		typedef conky::callback<std::string, std::string> Base;
+	class exec_cb: public conky::callback<conky::thread_task, std::string, std::string> {
+		typedef conky::callback<conky::thread_task, std::string, std::string> Base;
 
 	protected:
 		virtual void work();
 
 	public:
-		exec_cb(uint32_t period, bool wait, const std::string &cmd)
-			: Base(period, wait, Base::Tuple(cmd))
-		{}
+		exec_cb(const std::string &cmd) : Base(cmd) {}
 	};
 }
 
@@ -233,7 +231,7 @@ void fill_p(const char *buffer, struct text_object *obj, char *p, int p_max_size
 
 void print_exec(struct text_object *obj, char *p, int p_max_size)
 {
-	auto cb = conky::register_cb<exec_cb>(1, true, obj->data.s);
+	auto cb = conky::callbacks.register_simple_task<exec_cb>(1, obj->data.s);
 	fill_p(cb->get_result_copy().c_str(), obj, p, p_max_size);
 }
 
@@ -246,14 +244,14 @@ void print_execi(struct text_object *obj, char *p, int p_max_size)
 
 	uint32_t period = std::max(lround(ed->interval/active_update_interval()), 1l);
 
-	auto cb = conky::register_cb<exec_cb>(period, !obj->thread, ed->cmd);
+	auto cb = conky::callbacks.register_simple_task<exec_cb>(period, ed->cmd);
 
 	fill_p(cb->get_result_copy().c_str(), obj, p, p_max_size);
 }
 
 double execbarval(struct text_object *obj)
 {
-	auto cb = conky::register_cb<exec_cb>(1, true, obj->data.s);
+	auto cb = conky::callbacks.register_simple_task<exec_cb>(1, obj->data.s);
 	return get_barnum(cb->get_result_copy().c_str());
 }
 
@@ -266,7 +264,7 @@ double execi_barval(struct text_object *obj)
 
 	uint32_t period = std::max(lround(ed->interval/active_update_interval()), 1l);
 
-	auto cb = conky::register_cb<exec_cb>(period, !obj->thread, ed->cmd);
+	auto cb = conky::callbacks.register_simple_task<exec_cb>(period, ed->cmd);
 
 	return get_barnum(cb->get_result_copy().c_str());
 }

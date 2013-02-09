@@ -66,19 +66,13 @@ namespace conky {
 	 * function parameters. The period parameter specifies how often the callback will run. It
 	 * should be left for the user to decide that.
 	 */
-	template<typename Result, typename... Keys>
-	class callback: public thread<Keys...> {
-		typedef thread<Keys...> Base;
+	template<typename Result>
+	class result_callback {
 	protected:
 		Result result;
 
 	public:
 		std::mutex result_mutex;
-
-		callback(uint32_t period_, bool wait_, const typename Base::Tuple &tuple_,
-				bool use_pipe = false)
-			: Base(period_, wait_, tuple_, use_pipe)
-		{}
 
 		const Result& get_result()
 		{ return result; }
@@ -90,13 +84,19 @@ namespace conky {
 		}
 	};
 
-	extern thread_container<> callbacks;
-	template<typename Callback, typename... Params>
-	thread_handle<Callback> register_cb(uint32_t period, Params&&... params)
-	{
-		return callbacks.register_thread<Callback>(period, std::forward<Params>(params)...);
-	}
+	template<typename Type, typename Result, typename... Keys>
+	class callback: public key_mergable<Type, Keys...>, public result_callback<Result> {
+		static_assert(std::is_base_of<task_base, Type>::value,
+				"Type must be deriver from task_base");
 
+		typedef key_mergable<Type, Keys...> Base;
+
+	public:
+		callback(const Keys &... keys) : Base(keys...) { }
+		callback(const typename Base::Tuple &tuple) : Base(tuple) { }
+	};
+
+	extern task_container<> callbacks;
 }
 
 #endif /* UPDATE_CB_HH */

@@ -124,8 +124,8 @@ namespace {
 		int elapsed;
 	};
 
-	class mpd_cb: public conky::callback<mpd_result> {
-		typedef conky::callback<mpd_result> Base;
+	class mpd_cb: public conky::callback<conky::thread_task, mpd_result> {
+		typedef conky::callback<conky::thread_task, mpd_result> Base;
 	
 		mpd_Connection *conn;
 
@@ -133,9 +133,7 @@ namespace {
 		virtual void work();
 	
 	public:
-		mpd_cb(uint32_t period)
-			: Base(period, false, Tuple()), conn(NULL)
-		{}
+		mpd_cb() : conn(NULL) { }
 
 		~mpd_cb()
 		{
@@ -291,7 +289,7 @@ if (b) a=b; else a="";
 		uint32_t period = std::max(
 					lround(*music_player_interval/active_update_interval()), 1l
 				);
-		return conky::register_cb<mpd_cb>(period)->get_result_copy();
+		return conky::callbacks.register_threaded_task<mpd_cb>(period)->get_result_copy();
 	}
 }
 

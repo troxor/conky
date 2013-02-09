@@ -264,7 +264,7 @@ void stock_parse_arg(struct text_object *obj, const char *arg)
 legacy_cb_handle *create_cb_handle(int (*fn)())
 {
 	if(fn)
-		return new legacy_cb_handle(conky::register_cb<legacy_cb>(1, fn));
+		return new legacy_cb_handle(conky::callbacks.register_simple_task<legacy_cb>(1, fn));
 	else
 		return NULL;
 }

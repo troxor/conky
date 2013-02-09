@@ -31,7 +31,7 @@
 
 namespace conky {
 
-	class text_output: public output_method {
+	class text_output: public output_method, public thread_task {
 		unicode_converter conv;
 
 		std::vector<std::u32string> grid;
@@ -40,7 +40,7 @@ namespace conky {
 		virtual void work();
 
 	public:
-		text_output(uint32_t period);
+		text_output();
 
 		virtual std::unique_ptr<const scope> parse_scope(lua::state &) { return {}; }
 		virtual std::unique_ptr<const scope> enter_scope(const std::unique_ptr<const scope> &)

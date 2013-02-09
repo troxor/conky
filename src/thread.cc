@@ -31,84 +31,79 @@
 #include "logging.h"
 
 namespace conky {
-	thread_base::thread_base(size_t hash_, uint32_t period_, bool wait_, bool use_pipe)
-		: thread(NULL), hash(hash_), period(period_), remaining(0),
-		  pipefd(use_pipe ? pipe2(O_CLOEXEC) : std::pair<int, int>(-1, -1)),
-		  wait(wait_), done(false), unused(0)
-	{
-		if(use_pipe)
-			fcntl_setfl(pipefd.second, fcntl_getfl(pipefd.second) | O_NONBLOCK);
-	}
-
-	thread_base::~thread_base()
-	{
-		stop();
-	}
-
-	void thread_base::run(semaphore &sem_wait)
-	{
-		if(not thread)
-			thread = new std::thread(&thread_base::start_routine, this, std::ref(sem_wait));
-
-		sem_start.post();
-		if(pipefd.second >= 0) {
-			if(write(pipefd.second, "T", 1) != 1)
-				NORM_ERR("Unable to signal thread tick. Is the thread stuck?");
-		}
-	}
-
-	void thread_base::start_routine(semaphore &sem_wait)
-	{
-		for(;;) {
-			sem_start.wait();
-			if(done)
-				return;
-
-			// clear any remaining posts in case the previous iteration was very slow
-			// (this should only happen if wait == false)
-			while(sem_start.trywait());
-
-			work();
-			if(wait)
-				sem_wait.post();
-		}
-	}
-
-	void thread_base::stop()
-	{
-		if(thread) {
-			done = true;
-			sem_start.post();
-			if(pipefd.second >= 0) {
-				fcntl_setfl(pipefd.second, fcntl_getfl(pipefd.second) & ~O_NONBLOCK);
-				if(write(pipefd.second, "X", 1) != 1)
-					throw std::runtime_error("thread_base: unable to signal thread to terminate.");
+	namespace priv {
+		bool task_holder::tick()
+		{
+			if(remaining-- == 0) {
+				if(!unique() || ++unused < UNUSED_MAX) {
+					remaining = period-1;
+					run();
+				}
 			}
-			thread->join();
-			delete thread;
-			thread = NULL;
+			return unused < UNUSED_MAX;
 		}
-		if(pipefd.first >= 0) {
-			close(pipefd.first);
-			pipefd.first = -1;
+
+		void task_holder::merge(task_holder &&other)
+		{
+			if(other.period < period) {
+				period = other.period;
+				remaining = 0;
+			}
+			unused = 0;
 		}
-		if(pipefd.second >= 0) {
-			close(pipefd.second);
-			pipefd.second = -1;
+
+		void single_task_holder::run()
+		{
+			if(not thread)
+				thread = new std::thread(&thread_task::work, std::ref(*task));
+
+			task->tick();
+		}
+
+		single_task_holder::~single_task_holder()
+		{
+			if(thread) {
+				task->stop();
+				thread->join();
+				delete thread;
+				thread = NULL;
+			}
+		}
+
+		void task_pool::runner()
+		{
+			while(true) {
+				std::shared_ptr<task_base> task;
+				{
+					std::unique_lock<std::mutex> lock(mutex);
+					if(done)
+						break;
+					if(queue.empty()) {
+						cv.wait(lock);
+						continue;
+					} else {
+						task = queue.front();
+						queue.pop();
+					}
+				}
+				task->tick();
+				sem.post();
+			}
+		}
+
+		task_pool::~task_pool()
+		{
+			{
+				std::lock_guard<std::mutex> lock(mutex);
+				done = true;
+				cv.notify_all();
+			}
+			for(auto i = threads.begin(); i != threads.end(); ++i)
+				i->join();
 		}
 	}
 
-	void thread_base::merge(thread_base &&other)
-	{
-		if(other.period < period) {
-			period = other.period;
-			remaining = 0;
-		}
-		assert(wait == other.wait);
-		unused = 0;
-	}
-
-	thread_base::signal thread_base::get_signal()
+	piped_thread::signal piped_thread::get_signal()
 	{
 		char s;
 		if(read(signalfd(), &s, 1) != 1)
@@ -118,6 +113,30 @@ namespace conky {
 			case 'T': return NEXT;
 			default: throw std::logic_error("thread_base: Unknown signal.");
 		}
+	}
+
+	void piped_thread::tick()
+	{
+		Base::tick();
+
+		if(write(pipefd.second, "T", 1) != 1)
+			NORM_ERR("Unable to signal thread tick. Is the thread stuck?");
+	}
+
+	void piped_thread::stop()
+	{
+		fcntl_setfl(pipefd.second, fcntl_getfl(pipefd.second) & ~O_NONBLOCK);
+		if(write(pipefd.second, "X", 1) != 1)
+			throw std::runtime_error("thread_base: unable to signal thread to terminate.");
+
+		Base::stop();
+	}
+
+	piped_thread::~piped_thread()
+	{
+		close(pipefd.first);
+		close(pipefd.second);
+		pipefd = { -1, -1 };
 	}
 }
 

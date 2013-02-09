@@ -38,7 +38,7 @@ namespace conky {
 		class text_output_setting: public simple_config_setting<bool> {
 			typedef simple_config_setting<bool> Base;
 
-			thread_handle<text_output> om;
+			std::shared_ptr<text_output> om;
 		public:
 			text_output_setting(const std::string &name_, bool default_value_)
 				: Base(name_, default_value_, false)
@@ -49,7 +49,7 @@ namespace conky {
 				assert(init);
 
 				if(r)
-					om = output_methods.register_thread<text_output>(1);
+					om = output_methods.register_threaded_task<text_output>(1);
 
 				return value = r;
 			}
@@ -57,7 +57,7 @@ namespace conky {
 			virtual void cleanup()
 			{ om.reset(); }
 
-			const thread_handle<text_output>& get_om()
+			const std::shared_ptr<text_output>& get_om()
 			{ return om; }
 		};
 				
@@ -71,8 +71,8 @@ namespace conky {
 				);
 	}
 
-	text_output::text_output(uint32_t period)
-		: output_method(period, false), grid(25, std::u32string(80, ' '))
+	text_output::text_output()
+		: grid(25, std::u32string(80, ' '))
 	{}
 
 	void text_output::draw_text(const std::u32string &text, const point &p, const point &size)

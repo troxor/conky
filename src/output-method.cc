@@ -26,5 +26,5 @@
 #include "output-method.hh"
 
 namespace conky {
-	thread_container<output_method, false> output_methods;
+	task_container<output_method> output_methods;
 }

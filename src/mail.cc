@@ -104,10 +104,10 @@ namespace {
 		{}
 	};
 
-	class mail_cb: public conky::callback<mail_result, std::string, std::string, std::string,
-											std::string, std::string, in_port_t> {
-		typedef conky::callback<mail_result, std::string, std::string, std::string,
-								std::string, std::string, in_port_t> Base;
+	class mail_cb: public conky::callback<conky::piped_thread, mail_result, std::string,
+								std::string, std::string, std::string, std::string, in_port_t> {
+		typedef conky::callback<conky::piped_thread, mail_result, std::string, std::string,
+								std::string, std::string, std::string, in_port_t> Base;
 
 	protected:
 		addrinfo *ai;
@@ -145,7 +145,7 @@ namespace {
 			throw std::runtime_error("Unable to connect to mail server");
 		}
 
-		virtual void merge(thread_base &&other)
+		virtual void merge(task_base &&other)
 		{
 			mail_cb &&o = dynamic_cast<mail_cb &&>(other);
 			if(retries < o.retries) {
@@ -156,8 +156,8 @@ namespace {
 			Base::merge(std::move(other));
 		}
 
-		mail_cb(uint32_t period, const Tuple &tuple, uint16_t retries_)
-			: Base(period, false, tuple, true), ai(NULL), fail(0), retries(retries_)
+		mail_cb(const Tuple &tuple, uint16_t retries_)
+			: Base(tuple), ai(NULL), fail(0), retries(retries_)
 		{}
 
 		~mail_cb()
@@ -186,8 +186,8 @@ namespace {
 		virtual void work();
 
 	public:
-		imap_cb(uint32_t period, const Tuple &tuple, uint16_t retries_)
-			: Base(period, tuple, retries_)
+		imap_cb(const Tuple &tuple, uint16_t retries_)
+			: Base(tuple, retries_)
 		{}
 	};
 
@@ -198,8 +198,8 @@ namespace {
 		virtual void work();
 
 	public:
-		pop3_cb(uint32_t period, const Tuple &tuple, uint16_t retries_)
-			: Base(period, tuple, retries_)
+		pop3_cb(const Tuple &tuple, uint16_t retries_)
+			: Base(tuple, retries_)
 		{}
 	};
 
@@ -920,7 +920,7 @@ void print_imap_unseen(struct text_object *obj, char *p, int p_max_size)
 	if (!mail)
 		return;
 
-	auto cb = conky::register_cb<imap_cb>(mail->period, *mail, mail->retries);
+	auto cb = conky::callbacks.register_simple_task<imap_cb>(mail->period, *mail, mail->retries);
 
 	snprintf(p, p_max_size, "%lu", cb->get_result_copy().unseen);
 }
@@ -932,7 +932,7 @@ void print_imap_messages(struct text_object *obj, char *p, int p_max_size)
 	if (!mail)
 		return;
 
-	auto cb = conky::register_cb<imap_cb>(mail->period, *mail, mail->retries);
+	auto cb = conky::callbacks.register_simple_task<imap_cb>(mail->period, *mail, mail->retries);
 
 	snprintf(p, p_max_size, "%lu", cb->get_result_copy().messages);
 }
@@ -1001,7 +1001,7 @@ void print_pop3_unseen(struct text_object *obj, char *p, int p_max_size)
 	if (!mail)
 		return;
 
-	auto cb = conky::register_cb<pop3_cb>(mail->period, *mail, mail->retries);
+	auto cb = conky::callbacks.register_simple_task<pop3_cb>(mail->period, *mail, mail->retries);
 
 	snprintf(p, p_max_size, "%lu", cb->get_result_copy().unseen);
 }
@@ -1013,7 +1013,7 @@ void print_pop3_used(struct text_object *obj, char *p, int p_max_size)
 	if (!mail)
 		return;
 
-	auto cb = conky::register_cb<pop3_cb>(mail->period, *mail, mail->retries);
+	auto cb = conky::callbacks.register_simple_task<pop3_cb>(mail->period, *mail, mail->retries);
 
 	snprintf(p, p_max_size, "%.1f", cb->get_result_copy().used / 1024.0 / 1024.0);
 }

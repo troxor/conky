@@ -75,19 +75,16 @@ void gen_print_nothing(struct text_object *, char *, int);
  * used by the $text object */
 void gen_print_obj_data_s(struct text_object *, char *, int);
 
-class legacy_cb: public conky::callback<void *, int (*)()> {
-    typedef conky::callback<void *, int (*)()> Base;
+class legacy_cb: public conky::key_mergable<conky::task_base, int (*)()> {
+    typedef conky::key_mergable<conky::task_base, int (*)()> Base;
 
 protected:
-    virtual void work()
-    { std::get<0>(tuple)(); }
+    virtual void tick() { get<0>()(); }
 
 public:
-    legacy_cb(uint32_t period, int (*fn)())
-        : Base(period, true, Base::Tuple(fn))
-    {}
+    legacy_cb(int (*fn)()) : Base(fn) { }
 };
-typedef conky::thread_handle<legacy_cb> legacy_cb_handle;
+typedef std::shared_ptr<legacy_cb> legacy_cb_handle;
 
 struct text_object {
 	struct text_object *next, *prev;	/* doubly linked list of text objects */

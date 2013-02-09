@@ -234,7 +234,7 @@ namespace conky {
 			assert(init);
 
 			if(r)
-				om = output_methods.register_thread<x11_output>(1, *display_name);
+				om = output_methods.register_threaded_task<x11_output>(1, *display_name);
 
 			return value = r;
 		}
@@ -486,7 +486,7 @@ namespace conky {
 		return std::shared_ptr<x11_output::colour>(new alloc_colour(colour, *this));
 	}
 
-	class x11_output::window_handler: private non_copyable {
+	class x11_output::window_handler: private conky::non_copyable {
 	protected:
 		Display &display;
 		const Window window;
@@ -630,7 +630,7 @@ namespace conky {
 			XSetInputFocus(&display, e.window, RevertToParent, e.time);
 	}
 
-	class x11_output::buffer: private non_copyable {
+	class x11_output::buffer: private conky::non_copyable {
 	private:
 		Drawable drawable;
 		std::shared_ptr<colour> foreground;
@@ -885,7 +885,7 @@ namespace conky {
 		return ret;
 	}
 
-	class x11_output::font: private non_copyable {
+	class x11_output::font: private conky::non_copyable {
 	public:
 		virtual ~font() { }
 
@@ -894,7 +894,7 @@ namespace conky {
 		virtual void draw_text(const std::string &text, const point &pos, const point &size) = 0;
 	};
 
-	class x11_output::font_factory: private non_copyable {
+	class x11_output::font_factory: private conky::non_copyable {
 	protected:
 		Display &display;
 		buffer &drawable;
@@ -1074,8 +1074,8 @@ namespace conky {
 		std::shared_ptr<x11_output::font> font;
 	};
 
-	x11_output::x11_output(uint32_t period, const std::string &display_)
-		: output_method(period, true), display(NULL), screen(0), root(0),
+	x11_output::x11_output(const std::string &display_)
+		: display(NULL), screen(0), root(0),
 		  desktop(0), visual(NULL), depth(0), colourmap(0), active_scope(new x11_scope)
 
 	{
