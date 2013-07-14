@@ -219,7 +219,7 @@ namespace conky {
 				cv.notify_one();
 			}
 
-			void wait() { while(to_wait-- > 0) sem.wait(); }
+			void wait() { while(to_wait > 0) { sem.wait(); --to_wait; } }
 		};
 
 		class pooled_task_holder: public task_holder {
