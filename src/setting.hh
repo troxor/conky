@@ -109,13 +109,14 @@ namespace conky {
 		private:
 			config_setting_template &setting;
 
-			accessor(const accessor &r) : setting(r.setting) {}
 			accessor& operator=(const accessor &) = delete;
 
 		public:
 			accessor(config_setting_template &setting_)
 				: setting(setting_)
 			{}
+
+			accessor(const accessor &r) : setting(r.setting) {}
 
 			operator const T&() const { return setting.get(); }
 			const T operator=(const T &r) { return setting.set(r); }

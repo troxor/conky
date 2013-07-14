@@ -24,6 +24,7 @@
 #ifndef THREAD_HH
 #define THREAD_HH
 
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <thread>

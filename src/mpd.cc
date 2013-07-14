@@ -175,7 +175,7 @@ namespace {
 				mpd_info.status = "MPD not responding";
 			}
 			mpd_finishCommand(conn);
-			if (conn->error) {
+			if (!conn || conn->error) {
 				// fprintf(stderr, "%s\n", conn->errorStr);
 				mpd_closeConnection(conn);
 				conn = 0;
@@ -260,7 +260,7 @@ if (b) a=b; else a="";
 				}
 			}
 			mpd_finishCommand(conn);
-			if (conn->error) {
+			if (conn && conn->error) {
 				// fprintf(stderr, "%s\n", conn->errorStr);
 				mpd_closeConnection(conn);
 				conn = 0;

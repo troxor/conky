@@ -52,6 +52,28 @@ if(BUILD_LUA_IMLIB2)
 	set(lua_libs ${lua_libs} conky-imlib2)
 endif(BUILD_LUA_IMLIB2)
 
+if(BUILD_LUA_RSVG)
+	include_directories(${luarsvg_includes} ${CMAKE_CURRENT_SOURCE_DIR})
+	wrap_tolua(luarsvg_src rsvg.pkg)
+
+	add_library(conky-rsvg SHARED ${luarsvg_src})
+	set_target_properties(conky-rsvg PROPERTIES OUTPUT_NAME "rsvg")
+
+	target_link_libraries(conky-rsvg ${luarsvg_libs} ${TOLUA_LIBS})
+	set(lua_libs ${lua_libs} conky-rsvg)
+endif(BUILD_LUA_RSVG)
+
+if(BUILD_LUA_CAIRO AND BUILD_LUA_IMLIB2)
+	include_directories(${luacairo_includes} ${luaimlib2_includes} ${CMAKE_CURRENT_SOURCE_DIR})
+	wrap_tolua(luacairo_imlib2_helper_src cairo_imlib2_helper.pkg)
+
+	add_library(conky-cairo_imlib2_helper SHARED ${luacairo_imlib2_helper_src})
+	set_target_properties(conky-cairo_imlib2_helper PROPERTIES OUTPUT_NAME "cairo_imlib2_helper")
+
+	target_link_libraries(conky-cairo_imlib2_helper ${luacairo_libs} ${luaimlib2_libs} ${TOLUA_LIBS})
+	set(lua_libs ${lua_libs} conky-cairo_imlib2_helper)
+endif(BUILD_LUA_CAIRO AND BUILD_LUA_IMLIB2)
+
 install(TARGETS
 	${lua_libs}
 	LIBRARY DESTINATION lib/conky

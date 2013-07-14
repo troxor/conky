@@ -99,8 +99,8 @@ static char *fetch_hddtemp_output(void)
 	hints.ai_family = AF_INET;	/* XXX: hddtemp has no ipv6 support (yet?) */
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ((i = getaddrinfo(*hddtemp_host.c_str(),
-							*hddtemp_port.c_str(), &hints, &result))) {
+	if ((i = getaddrinfo(hddtemp_host->c_str(),
+							hddtemp_port->c_str(), &hints, &result))) {
 		NORM_ERR("getaddrinfo(): %s", gai_strerror(i));
 		return NULL;
 	}

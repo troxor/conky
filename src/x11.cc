@@ -72,6 +72,16 @@ namespace conky {
 		{ "no",     buffer_type::SINGLE }
 	};
 
+	template<>
+	lua_traits<window_hints>::Map lua_traits<window_hints>::map = {
+		{ "undecorated",  HINT_UNDECORATED },
+		{ "below",        HINT_BELOW },
+		{ "above",        HINT_ABOVE },
+		{ "sticky",       HINT_STICKY },
+		{ "skip_taskbar", HINT_SKIP_TASKBAR },
+		{ "skip_pager",   HINT_SKIP_PAGER }
+	};
+
 	namespace {
 		template<typename T>
 		class fancy_x11_setting: public simple_config_setting<T> {
@@ -297,16 +307,6 @@ namespace conky {
 		{ "panel",    TYPE_PANEL },
 		{ "desktop",  TYPE_DESKTOP },
 		{ "override", TYPE_OVERRIDE }
-	};
-
-	template<>
-	lua_traits<window_hints>::Map lua_traits<window_hints>::map = {
-		{ "undecorated",  HINT_UNDECORATED },
-		{ "below",        HINT_BELOW },
-		{ "above",        HINT_ABOVE },
-		{ "sticky",       HINT_STICKY },
-		{ "skip_taskbar", HINT_SKIP_TASKBAR },
-		{ "skip_pager",   HINT_SKIP_PAGER }
 	};
 
 	namespace {
