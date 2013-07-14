@@ -87,7 +87,7 @@ namespace conky {
 	template<typename Type, typename Result, typename... Keys>
 	class callback: public key_mergable<Type, Keys...>, public result_callback<Result> {
 		static_assert(std::is_base_of<task_base, Type>::value,
-				"Type must be deriver from task_base");
+				"Type must be derived from task_base");
 
 		typedef key_mergable<Type, Keys...> Base;
 
