@@ -70,12 +70,26 @@ namespace conky {
 	class result_callback {
 	protected:
 		Result result;
-
-	public:
 		std::mutex result_mutex;
 
-		const Result& get_result()
-		{ return result; }
+	public:
+		class holder: private non_copyable {
+			std::unique_lock<std::mutex> lock_;
+			Result &result_;
+
+			holder(result_callback &cb) : lock_(cb.result_mutex), result_(cb.result) { }
+
+		public:
+			holder(holder &&rhs) : lock_(std::move(rhs.lock_)), result_(rhs.result_) { }
+
+			Result* operator->() { return &result_; }
+			const Result* operator->() const { return &result_; }
+
+			friend class result_callback;
+		};
+
+		holder get_result_locked()
+		{ return holder(*this); }
 
 		Result get_result_copy()
 		{
