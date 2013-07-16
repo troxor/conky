@@ -24,6 +24,10 @@
 #ifndef UTIL_HH
 #define UTIL_HH
 
+#include <algorithm>
+#include <cstdint>
+#include <mutex>
+
 namespace conky {
 
 	struct point {
@@ -109,6 +113,8 @@ namespace conky {
 			&& ( min <= 0
 				|| value >= static_cast<typename std::make_unsigned<Signed2>::type>(min) );
 	}
+
+	std::string format_seconds(std::chrono::seconds seconds);
 } /* namespace conky */
 
 #endif /* UTIL_HH */

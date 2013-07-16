@@ -48,6 +48,7 @@
 // #include <assert.h>
 #include <time.h>
 #include <unordered_map>
+#include "data-source.hh"
 #include "setting.hh"
 #include "top.h"
 
@@ -98,7 +99,34 @@ struct sysfs {
 #define SHORTSTAT_TEMPL "%*s %llu %llu %llu"
 #define LONGSTAT_TEMPL "%*s %llu %llu %llu "
 
-static conky::simple_config_setting<bool> top_cpu_separate("top_cpu_separate", false, true);
+namespace conky {
+namespace {
+
+simple_config_setting<bool> top_cpu_separate("top_cpu_separate", false, true);
+
+class sysinfo_cb: public callback<task_base, struct sysinfo> {
+	virtual void tick() { std::lock_guard<std::mutex> lock(result_mutex); sysinfo(&result); }
+};
+
+class uptime_source: public data_source_base {
+
+	const std::shared_ptr<sysinfo_cb> cb;
+
+	long get() const {return cb->get_result_locked()->uptime; }
+public:
+	uptime_source(lua::state &l)
+		: cb(callbacks.register_simple_task<sysinfo_cb>(1 /*XXX*/))
+	{ l.pop(); }
+
+	virtual double get_number() const { return get(); }
+
+	virtual std::string get_text() const { return format_seconds(std::chrono::seconds(get())); }
+};
+
+register_data_source register_uptime("uptime", &std::make_shared<uptime_source, lua::state &>);
+} // anonymous namespace
+} // namespace conky
+
 
 /* This flag tells the linux routines to use the /proc system where possible,
  * even if other api's are available, e.g. sysinfo() or getloadavg().
@@ -108,31 +136,6 @@ static int prefer_proc = 0;
 
 void prepare_update(void)
 {
-}
-
-int update_uptime(void)
-{
-#ifdef HAVE_SYSINFO
-	if (!prefer_proc) {
-		struct sysinfo s_info;
-
-		sysinfo(&s_info);
-		info.uptime = (double) s_info.uptime;
-	} else
-#endif
-	{
-		static int rep = 0;
-		FILE *fp;
-
-		if (!(fp = open_file("/proc/uptime", &rep))) {
-			info.uptime = 0.0;
-			return 0;
-		}
-		if (fscanf(fp, "%lf", &info.uptime) <= 0)
-			info.uptime = 0;
-		fclose(fp);
-	}
-	return 0;
 }
 
 int check_mount(struct text_object *obj)
@@ -2549,7 +2552,7 @@ static unsigned long long calc_cpu_total(void)
 inline static void calc_cpu_each(unsigned long long total)
 {
 	float mul = 100.0;
-	if(*top_cpu_separate)
+	if(*conky::top_cpu_separate)
 		mul *= info.cpu_count;
 
 	for(struct process *p = first_process; p; p = p->next)

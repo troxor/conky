@@ -2239,6 +2239,7 @@ static void main_loop()
 		// XXX conky::run_all_callbacks();
 		++conky::total_updates;
 		conky::output_methods.run_all_tasks();
+		conky::callbacks.run_all_tasks();
 		last_update = std::chrono::high_resolution_clock::now();
 	}
 }
