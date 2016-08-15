@@ -61,6 +61,9 @@
 #include "imlib2.h"
 #endif /* BUILD_IMLIB2 */
 #endif /* BUILD_X11 */
+#ifdef BUILD_NCURSES
+#include <ncurses.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
@@ -83,6 +86,7 @@
 #ifdef BUILD_X11
 #include "fonts.h"
 #endif
+#include "fs.h"
 #ifdef BUILD_ICONV
 #include "iconv_tools.h"
 #endif
@@ -157,6 +161,10 @@ static conky::simple_config_setting<bool> disable_auto_reload("disable_auto_relo
 /* two strings for internal use */
 static char *tmpstring1, *tmpstring2;
 
+#ifdef BUILD_NCURSES
+extern WINDOW* ncurses_window;
+#endif
+
 enum spacer_state {
 	NO_SPACER = 0,
 	LEFT_SPACER,
@@ -192,7 +200,7 @@ int top_io;
 #endif
 int top_running;
 static conky::simple_config_setting<bool> extra_newline("extra_newline", false, false);
-static volatile int g_signal_pending;
+static volatile sig_atomic_t g_sigterm_pending, g_sighup_pending;
 
 /* Update interval */
 conky::range_config_setting<double> update_interval("update_interval", 0.0,
@@ -321,6 +329,9 @@ static void print_version(void)
 #ifdef BUILD_I18N
                 << _("  * Internationalization support\n")
 #endif
+#ifdef BUILD_PULSEAUDIO
+				<< _("  * PulseAudio\n")
+#endif /* BUIL_PULSEAUDIO */
 #ifdef DEBUG
                 << _("  * Debugging extensions\n")
 #endif
@@ -341,6 +352,9 @@ static void print_version(void)
 # ifdef BUILD_XDAMAGE
                 << _("  * Xdamage extension\n")
 # endif /* BUILD_XDAMAGE */
+# ifdef BUILD_XINERAMA
+                << _("  * Xinerama extension (virtual display)\n")
+# endif /* BUILD_XINERAMA */
 # ifdef BUILD_XSHAPE
                 << _("  * Xshape extension (click through)\n")
 # endif /* BUILD_XSHAPE */
@@ -415,6 +429,7 @@ struct _x11_stuff_s {
 /* text size */
 
 static int text_start_x, text_start_y;	/* text start position in window */
+static int text_offset_x, text_offset_y; /* offset for start position */
 static int text_width = 1, text_height = 1; /* initially 1 so no zero-sized window is created */
 
 #endif /* BUILD_X11 */
@@ -909,19 +924,17 @@ static void generate_text(void)
 {
 	char *p;
 	unsigned int i, j, k;
-
 	special_count = 0;
-
-	/* update info */
 
 	current_update_time = get_time();
 
+	/* clears netstats info, calls conky::run_all_callbacks(), and changes
+	 * some info.mem entries */
 	update_stuff();
 
-	/* add things to the buffer */
-
-	/* generate text */
-
+	/* populate the text buffer; generate_text_internal() iterates through
+	 * global_root_object (an instance of the text_object struct) and calls
+	 * any callbacks that were set on startup by construct_text_object(). */
 	p = text_buffer;
 
 	generate_text_internal(p, max_user_text.get(*state), global_root_object);
@@ -955,12 +968,11 @@ static void generate_text(void)
 	}
 
 	double ui = active_update_interval();
+	double time = get_time();
 	next_update_time += ui;
-	if (next_update_time < get_time()) {
-		next_update_time = get_time() + ui;
-	} else if (next_update_time > get_time() + ui) {
-		next_update_time = get_time() + ui;
-	}
+	if (next_update_time < time ||
+		next_update_time > time + ui)
+		next_update_time = time - fmod(time, ui) + ui;
 	last_update_time = current_update_time;
 	total_updates++;
 }
@@ -1368,20 +1380,20 @@ static void draw_string(const char *s)
 			c2.color.alpha = fonts[selected_font].font_alpha;
 			if (utf8_mode.get(*state)) {
 				XftDrawStringUtf8(window.xftdraw, &c2, fonts[selected_font].xftfont,
-					cur_x, cur_y, (const XftChar8 *) s, strlen(s));
+					text_offset_x + cur_x, text_offset_y + cur_y, (const XftChar8 *) s, strlen(s));
 			} else {
 				XftDrawString8(window.xftdraw, &c2, fonts[selected_font].xftfont,
-					cur_x, cur_y, (const XftChar8 *) s, strlen(s));
+					text_offset_x + cur_x, text_offset_y + cur_y, (const XftChar8 *) s, strlen(s));
 			}
 		} else
 #endif
 		{
 			if (utf8_mode.get(*state)) {
-				Xutf8DrawString(display, window.drawable, fonts[selected_font].fontset, window.gc, cur_x, cur_y, s,
-					strlen(s));
+				Xutf8DrawString(display, window.drawable, fonts[selected_font].fontset, window.gc,
+					text_offset_x + cur_x, text_offset_y + cur_y, s, strlen(s));
 			} else {
-				XDrawString(display, window.drawable, window.gc, cur_x, cur_y, s,
-					strlen(s));
+				XDrawString(display, window.drawable, window.gc,
+					text_offset_x + cur_x, text_offset_y + cur_y, s, strlen(s));
 			}
 		}
 		cur_x += width_of_s;
@@ -1439,8 +1451,8 @@ int draw_each_line_inner(char *s, int special_index, int last_special_applied)
 
 					XSetLineAttributes(display, window.gc, h, LineSolid,
 						CapButt, JoinMiter);
-					XDrawLine(display, window.drawable, window.gc, cur_x,
-						cur_y - mid / 2, cur_x + w, cur_y - mid / 2);
+					XDrawLine(display, window.drawable, window.gc, text_offset_x + cur_x,
+						text_offset_y + cur_y - mid / 2, text_offset_x + cur_x + w, text_offset_y + cur_y - mid / 2);
 					break;
 				}
 
@@ -1455,8 +1467,8 @@ int draw_each_line_inner(char *s, int special_index, int last_special_applied)
 					XSetLineAttributes(display, window.gc, h, LineOnOffDash,
 						CapButt, JoinMiter);
 					XSetDashes(display, window.gc, 0, ss, 2);
-					XDrawLine(display, window.drawable, window.gc, cur_x,
-						cur_y - mid / 2, cur_x + w, cur_y - mid / 2);
+					XDrawLine(display, window.drawable, window.gc, text_offset_x + cur_x,
+						text_offset_y + cur_y - mid / 2, text_offset_x + cur_x + w, text_offset_x + cur_y - mid / 2);
 					break;
 				}
 
@@ -1486,10 +1498,10 @@ int draw_each_line_inner(char *s, int special_index, int last_special_applied)
 					XSetLineAttributes(display, window.gc, 1, LineSolid,
 						CapButt, JoinMiter);
 
-					XDrawRectangle(display, window.drawable, window.gc, cur_x,
-						by, w, h);
-					XFillRectangle(display, window.drawable, window.gc, cur_x,
-						by, w * bar_usage / scale, h);
+					XDrawRectangle(display, window.drawable, window.gc, text_offset_x + cur_x,
+						text_offset_y + by, w, h);
+					XFillRectangle(display, window.drawable, window.gc, text_offset_x + cur_x,
+						text_offset_y + by, w * bar_usage / scale, h);
 					if (h > cur_y_add
 							&& h > font_h) {
 						cur_y_add = h;
@@ -1528,7 +1540,7 @@ int draw_each_line_inner(char *s, int special_index, int last_special_applied)
 							CapButt, JoinMiter);
 
 					XDrawArc(display, window.drawable, window.gc,
-							cur_x, by, w, h * 2, 0, 180*64);
+							text_offset_x + cur_x, text_offset_y + by, w, h * 2, 0, 180*64);
 
 #ifdef BUILD_MATH
 					usage = current->arg;
@@ -1538,7 +1550,7 @@ int draw_each_line_inner(char *s, int special_index, int last_special_applied)
 					py = (float)(by+(h))-(float)(h)*sin(angle);
 
 					XDrawLine(display, window.drawable, window.gc,
-							cur_x + (w/2.), by+(h), (int)(px), (int)(py));
+							text_offset_x + cur_x + (w/2.), text_offset_y + by+(h), text_offset_x + (int)(px), text_offset_y + (int)(py));
 #endif /* BUILD_MATH */
 
 					if (h > cur_y_add
@@ -1582,7 +1594,7 @@ int draw_each_line_inner(char *s, int special_index, int last_special_applied)
 						XSetLineAttributes(display, window.gc, 1, LineSolid,
 							CapButt, JoinMiter);
 						XDrawRectangle(display, window.drawable, window.gc,
-							cur_x, by, w, h);
+							text_offset_x + cur_x, text_offset_y + by, w, h);
 					}
 					XSetLineAttributes(display, window.gc, 1, LineSolid,
 						CapButt, JoinMiter);
@@ -1629,8 +1641,8 @@ int draw_each_line_inner(char *s, int special_index, int last_special_applied)
 							}
 							/* this is mugfugly, but it works */
 							XDrawLine(display, window.drawable, window.gc,
-									cur_x + i + 1, by + h, cur_x + i + 1,
-									round_to_int((double)by + h - current->graph[j] *
+									text_offset_x + cur_x + i + 1, text_offset_y + by + h, text_offset_x + cur_x + i + 1,
+									text_offset_y + round_to_int((double)by + h - current->graph[j] *
 										(h - 1) / current->scale));
 							++j;
 						}
@@ -1746,16 +1758,6 @@ int draw_each_line_inner(char *s, int special_index, int last_special_applied)
 					cur_y += current->arg;
 					break;
 
-				case GOTO:
-					if (current->arg >= 0) {
-						cur_x = (int) current->arg;
-#ifdef BUILD_X11
-						//make sure shades are 1 pixel to the right of the text
-						if(draw_mode == BG) cur_x++;
-#endif
-					}
-					break;
-
 				case TAB:
 				{
 					int start = current->arg;
@@ -1807,6 +1809,23 @@ int draw_each_line_inner(char *s, int special_index, int last_special_applied)
 					break;
 				}
 #endif /* BUILD_X11 */
+				case GOTO:
+					if (current->arg >= 0) {
+						cur_x = (int) current->arg;
+#ifdef BUILD_X11
+						//make sure shades are 1 pixel to the right of the text
+						if(draw_mode == BG) cur_x++;
+#endif /* BUILD_X11 */
+#ifdef BUILD_NCURSES
+						if (out_to_ncurses.get(*state)){
+							int x, y;
+							getyx(ncurses_window, y, x);
+							move(y, cur_x);
+						}
+#endif /* BUILD_NCURSES */
+					}
+					break;
+
 			}
 
 #ifdef BUILD_X11
@@ -1893,7 +1912,7 @@ static void draw_text(void)
 
 			int offset = border_inner_margin.get(*state) + bw;
 			XDrawRectangle(display, window.drawable, window.gc,
-				text_start_x - offset, text_start_y - offset,
+				text_offset_x + text_start_x - offset, text_offset_y + text_start_y - offset,
 				text_width + 2*offset, text_height + 2*offset);
 		}
 
@@ -1915,6 +1934,7 @@ static void draw_text(void)
 
 static void draw_stuff(void)
 {
+	text_offset_x = text_offset_y = 0;
 #ifdef BUILD_IMLIB2
 	cimlib_render(text_start_x, text_start_y, window.width, window.height);
 #endif /* BUILD_IMLIB2 */
@@ -1933,33 +1953,28 @@ static void draw_stuff(void)
 	if (out_to_x.get(*state)) {
 		selected_font = 0;
 		if (draw_shades.get(*state) && !draw_outline.get(*state)) {
-			text_start_x++;
+			text_offset_x = text_offset_y = 1;
 			text_start_y++;
 			set_foreground_color(default_shade_color.get(*state));
 			draw_mode = BG;
 			draw_text();
-			text_start_x--;
-			text_start_y--;
+			text_offset_x = text_offset_y = 0;
 		}
 
 		if (draw_outline.get(*state)) {
-			int i, j;
 			selected_font = 0;
 
-			for (i = -1; i < 2; i++) {
-				for (j = -1; j < 2; j++) {
-					if (i == 0 && j == 0) {
+			for (text_offset_x = -1; text_offset_x < 2; text_offset_x++) {
+				for (text_offset_y = -1; text_offset_y < 2; text_offset_y++) {
+					if (text_offset_x == 0 && text_offset_y == 0) {
 						continue;
 					}
-					text_start_x += i;
-					text_start_y += j;
 					set_foreground_color(default_outline_color.get(*state));
 					draw_mode = OUTLINE;
 					draw_text();
-					text_start_x -= i;
-					text_start_y -= j;
 				}
 			}
+			text_offset_x = text_offset_y = 0;
 		}
 
 		set_foreground_color(default_color.get(*state));
@@ -2057,7 +2072,7 @@ static void main_loop(void)
 #endif
 
 	last_update_time = 0.0;
-	next_update_time = get_time();
+	next_update_time = get_time() - fmod(get_time(), active_update_interval());
 	info.looped = 0;
 	while (terminate == 0
 			&& (total_run_times.get(*state) == 0 || info.looped < total_run_times.get(*state))) {
@@ -2245,6 +2260,18 @@ static void main_loop(void)
 						if ( ev.xproperty.state == PropertyNewValue ) {
 							get_x11_desktop_info( ev.xproperty.display, ev.xproperty.atom );
 						}
+#ifdef USE_ARGB
+						if (!have_argb_visual) {
+#endif
+							if ( ev.xproperty.atom == ATOM(_XROOTPMAP_ID)
+									|| ev.xproperty.atom == ATOM(_XROOTMAP_ID)) {
+								draw_stuff();
+								next_update_time = get_time();
+								need_to_update = 1;
+							}
+#ifdef USE_ARGB
+						}
+#endif
 						break;
 					}
 
@@ -2418,38 +2445,27 @@ static void main_loop(void)
 		}
 #endif
 
-		switch (g_signal_pending) {
-			case SIGHUP:
-			case SIGUSR1:
-				NORM_ERR("received SIGHUP or SIGUSR1. reloading the config file.");
-				reload_config();
-				break;
-			case SIGINT:
-			case SIGTERM:
-				NORM_ERR("received SIGINT or SIGTERM to terminate. bye!");
-				terminate = 1;
+		if (g_sighup_pending) {
+			g_sighup_pending = false;
+			NORM_ERR("received SIGHUP or SIGUSR1. reloading the config file.");
+			reload_config();
+		}
+
+		if (g_sigterm_pending) {
+			g_sigterm_pending = false;
+			NORM_ERR("received SIGINT or SIGTERM to terminate. bye!");
+			terminate = 1;
 #ifdef BUILD_X11
-				if (out_to_x.get(*state)) {
-					XDestroyRegion(x11_stuff.region);
-					x11_stuff.region = NULL;
+			if (out_to_x.get(*state)) {
+				XDestroyRegion(x11_stuff.region);
+				x11_stuff.region = NULL;
 #ifdef BUILD_XDAMAGE
-					XDamageDestroy(display, x11_stuff.damage);
-					XFixesDestroyRegion(display, x11_stuff.region2);
-					XFixesDestroyRegion(display, x11_stuff.part);
+				XDamageDestroy(display, x11_stuff.damage);
+				XFixesDestroyRegion(display, x11_stuff.region2);
+				XFixesDestroyRegion(display, x11_stuff.part);
 #endif /* BUILD_XDAMAGE */
-				}
+			}
 #endif /* BUILD_X11 */
-				break;
-			default:
-				/* Reaching here means someone set a signal
-				 * (SIGXXXX, signal_handler), but didn't write any code
-				 * to deal with it.
-				 * If you don't want to handle a signal, don't set a handler on
-				 * it in the first place. */
-				if (g_signal_pending) {
-					NORM_ERR("ignoring signal (%d)", g_signal_pending);
-				}
-				break;
 		}
 #ifdef HAVE_SYS_INOTIFY_H
 		if (!disable_auto_reload.get(*state) && inotify_fd != -1
@@ -2503,7 +2519,6 @@ static void main_loop(void)
 #endif /* HAVE_SYS_INOTIFY_H */
 
 		llua_update_info(&info, active_update_interval());
-		g_signal_pending = 0;
 	}
 	clean_up(NULL, NULL);
 
@@ -2597,6 +2612,7 @@ void clean_up_without_threads(void *memtofree1, void* memtofree2)
 	free_specials(specials);
 
 	clear_net_stats();
+	clear_fs_stats();
 	clear_diskio_stats();
 	free_and_zero(global_cpu);
 
@@ -3062,7 +3078,8 @@ int main(int argc, char **argv)
 #endif
 	argc_copy = argc;
 	argv_copy = argv;
-	g_signal_pending = 0;
+	g_sigterm_pending = false;
+	g_sighup_pending = false;
 
 #ifdef BUILD_CURL
 	struct curl_global_initializer {
@@ -3181,5 +3198,23 @@ static void signal_handler(int sig)
 	 * we will poll g_signal_pending with each loop of conky
 	 * and do any signal processing there, NOT here */
 
-	g_signal_pending = sig;
+	switch (sig) {
+		case SIGINT:
+		case SIGTERM:
+			g_sigterm_pending = true;
+			break;
+		case SIGHUP:
+		case SIGUSR1:
+			g_sighup_pending = true;
+			break;
+		default:
+			/* Reaching here means someone set a signal
+			 * (SIGXXXX, signal_handler), but didn't write any code
+			 * to deal with it.
+			 * If you don't want to handle a signal, don't set a handler on
+			 * it in the first place.
+			 * We cannot print debug messages from a sighandler, so simply ignore.
+			 */
+			break;
+	}
 }
